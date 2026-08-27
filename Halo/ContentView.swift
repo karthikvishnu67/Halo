@@ -44,6 +44,17 @@ struct ContentView: View {
             if let rect = previewHandle.viewRect(for: person.boundingBox) {
                 Rectangle()
                     .strokeBorder(.green, lineWidth: 2)
+                    .overlay(alignment: .topLeading) {
+                        // The track id makes identity visible: it should stay
+                        // put while a person moves around the frame.
+                        Text("#\(person.id)")
+                            .font(.caption.monospaced().bold())
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(.green)
+                            .offset(y: -20)
+                    }
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
             }
@@ -51,7 +62,7 @@ struct ContentView: View {
     }
 
     private var detectionCount: some View {
-        Text("\(camera.detector.people.count) detected")
+        Text("\(camera.detector.people.count) tracked")
             .font(.caption.monospaced())
             .foregroundStyle(.white)
             .padding(.horizontal, 10)

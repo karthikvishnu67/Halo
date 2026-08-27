@@ -27,7 +27,10 @@ struct DetectedPerson: Identifiable {
 @Observable
 final class PersonDetector {
 
-    private(set) var people: [DetectedPerson] = []
+    /// Subjects with identity that persists across frames.
+    private(set) var people: [TrackedPerson] = []
+
+    @ObservationIgnored private let tracker = PersonTracker()
 
     /// Detection is slower than the camera's frame rate. Rather than letting
     /// frames queue up (which shows as lag), we keep exactly one request in
@@ -74,6 +77,6 @@ final class PersonDetector {
     }
 
     private func publish(_ found: [DetectedPerson]) {
-        people = found
+        people = tracker.update(with: found)
     }
 }
