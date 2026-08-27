@@ -1,0 +1,68 @@
+# ---------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# ---------------------------------------------------------------
+# Xcode — user-specific state (never shared)
+# ---------------------------------------------------------------
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+
+# Shared schemes and shared settings are intentionally NOT ignored:
+#   *.xcodeproj/xcshareddata/
+#   *.xcworkspace/xcshareddata/
+
+# ---------------------------------------------------------------
+# Xcode — build products & intermediates
+# ---------------------------------------------------------------
+build/
+DerivedData/
+*.o
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+*.app
+*.xcarchive
+*.xcresult
+timeline.xctimeline
+playground.xcworkspace
+
+# ---------------------------------------------------------------
+# Swift Package Manager
+# ---------------------------------------------------------------
+.build/
+.swiftpm/
+Packages/
+Package.pins
+# Package.resolved pins dependency versions for an app target —
+# keep it tracked so builds are reproducible.
+!*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+!*.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+# ---------------------------------------------------------------
+# Injected secrets / local config
+# ---------------------------------------------------------------
+*.xcconfig.local
+.env
+.env.local
+
+# ---------------------------------------------------------------
+# Uncomment if these tools get adopted
+# ---------------------------------------------------------------
+# Pods/
+# Carthage/Build/
+# fastlane/report.xml
+# fastlane/screenshots/**/*.png
+# fastlane/test_output
