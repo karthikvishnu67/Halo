@@ -18,8 +18,24 @@ final class CameraPreviewUIView: UIView {
     }
 }
 
+/// Lets SwiftUI reach the preview layer for coordinate conversion.
+///
+/// The preview crops the camera image to fill the screen, so normalized Vision
+/// coordinates can't be mapped onto the view by simple multiplication. Only the
+/// preview layer knows the crop, and `layerRectConverted` applies it.
+@MainActor
+final class PreviewLayerHandle {
+    fileprivate weak var layer: AVCaptureVideoPreviewLayer?
+
+    /// `rect` is normalized 0-1 with a top-left origin.
+    func viewRect(for rect: CGRect) -> CGRect? {
+        layer?.layerRectConverted(fromMetadataOutputRect: rect)
+    }
+}
+
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    let handle: PreviewLayerHandle
 
     func makeUIView(context: Context) -> CameraPreviewUIView {
         let view = CameraPreviewUIView()
@@ -27,6 +43,7 @@ struct CameraPreview: UIViewRepresentable {
         view.previewLayer.videoGravity = .resizeAspectFill
         // V1.1 assumes a portrait phone. Rotation handling comes later if we need it.
         view.previewLayer.connection?.videoRotationAngle = 90
+        handle.layer = view.previewLayer
         return view
     }
 

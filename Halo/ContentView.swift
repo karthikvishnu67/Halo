@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var camera = CameraManager()
+    @State private var previewHandle = PreviewLayerHandle()
 
     var body: some View {
         ZStack {
@@ -16,7 +17,9 @@ struct ContentView: View {
 
             switch camera.status {
             case .running:
-                CameraPreview(session: camera.session)
+                CameraPreview(session: camera.session, handle: previewHandle)
+                    .overlay { detectionBoxes }
+                    .overlay(alignment: .top) { detectionCount }
                     .ignoresSafeArea()
 
             case .idle:
@@ -33,6 +36,28 @@ struct ContentView: View {
         }
         .statusBarHidden()
         .task { await camera.start() }
+    }
+
+    /// V1.2 draws raw boxes. The Halo bubble replaces these in V1.5.
+    private var detectionBoxes: some View {
+        ForEach(camera.detector.people) { person in
+            if let rect = previewHandle.viewRect(for: person.boundingBox) {
+                Rectangle()
+                    .strokeBorder(.green, lineWidth: 2)
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
+            }
+        }
+    }
+
+    private var detectionCount: some View {
+        Text("\(camera.detector.people.count) detected")
+            .font(.caption.monospaced())
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.black.opacity(0.5), in: .capsule)
+            .padding(.top, 60)
     }
 
     private func message(_ text: String) -> some View {

@@ -30,6 +30,22 @@ final class CameraManager {
     /// Configuring and starting a session blocks, so it never happens on the main thread.
     nonisolated private let sessionQueue = DispatchQueue(label: "com.halo.camera-session")
 
+    /// Camera frames are delivered here, off the main thread.
+    nonisolated private let videoQueue = DispatchQueue(label: "com.halo.camera-frames")
+
+    /// Finds people in the frames this session produces.
+    let detector: PersonDetector
+
+    @ObservationIgnored nonisolated private let frameForwarder: FrameForwarder
+
+    init() {
+        let detector = PersonDetector()
+        self.detector = detector
+        self.frameForwarder = FrameForwarder { pixelBuffer in
+            detector.detect(in: pixelBuffer)
+        }
+    }
+
     /// Only touched on `sessionQueue`.
     @ObservationIgnored nonisolated(unsafe) private var isConfigured = false
 
@@ -88,6 +104,18 @@ final class CameraManager {
                 return "Couldn't add the rear camera to the capture session."
             }
             session.addInput(input)
+
+            // A second output alongside the preview layer: the preview keeps
+            // rendering on its own while these frames go to Vision.
+            let videoOutput = AVCaptureVideoDataOutput()
+            videoOutput.alwaysDiscardsLateVideoFrames = true
+            videoOutput.setSampleBufferDelegate(frameForwarder, queue: videoQueue)
+            guard session.canAddOutput(videoOutput) else {
+                session.commitConfiguration()
+                return "Couldn't add the video output to the capture session."
+            }
+            session.addOutput(videoOutput)
+
             session.commitConfiguration()
 
             isConfigured = true
