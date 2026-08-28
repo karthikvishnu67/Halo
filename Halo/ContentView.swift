@@ -40,17 +40,28 @@ struct ContentView: View {
 
     /// A bubble per tracked subject, floating just above their head.
     private var bubbles: some View {
-        ForEach(camera.detector.people) { person in
-            if let rect = previewHandle.viewRect(for: person.smoothedBox) {
-                HaloBubble(text: "Hello from Halo 👋")
-                    .fixedSize()
-                    .scaleEffect(scale(for: rect), anchor: .bottom)
-                    .position(x: rect.midX, y: bubbleY(above: rect))
-                    // Detection passes land irregularly, so glide between them
-                    // instead of snapping to each new position.
-                    .animation(.smooth(duration: 0.25), value: rect)
+        GeometryReader { geometry in
+            ForEach(camera.detector.people) { person in
+                if let rect = previewHandle.viewRect(for: person.smoothedBox) {
+                    HaloBubble(profile: camera.detector.profile(for: person.id))
+                        .fixedSize()
+                        .scaleEffect(scale(for: rect), anchor: .bottom)
+                        .position(x: bubbleX(above: rect, screenWidth: geometry.size.width),
+                                  y: bubbleY(above: rect))
+                        // Detection passes land irregularly, so glide between
+                        // them instead of snapping to each new position.
+                        .animation(.smooth(duration: 0.25), value: rect)
+                }
             }
         }
+    }
+
+    /// Centred over the person, but pulled back inside the screen so someone
+    /// near the edge doesn't get half a bubble.
+    private func bubbleX(above rect: CGRect, screenWidth: CGFloat) -> CGFloat {
+        let halfBubble = HaloBubble.maxWidth / 2 * scale(for: rect)
+        let margin: CGFloat = 8
+        return min(max(rect.midX, halfBubble + margin), screenWidth - halfBubble - margin)
     }
 
     /// The top of the bounding box is roughly the top of the head, so the

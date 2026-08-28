@@ -8,17 +8,31 @@
 import SwiftUI
 
 struct HaloBubble: View {
-    let text: String
+    /// Bounded so a long message can't stretch off-screen, and so the overlay
+    /// knows how far from the edge a bubble must stay.
+    static let maxWidth: CGFloat = 190
+
+    let profile: HaloProfile
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(text)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(.ultraThinMaterial, in: .capsule)
-                .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 0.5))
+            VStack(spacing: 1) {
+                Text(profile.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                Text(profile.message)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: Self.maxWidth)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial, in: .rect(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(.white.opacity(0.25), lineWidth: 0.5)
+            )
 
             // A small tail so the bubble reads as belonging to the person
             // below it rather than floating free.
@@ -44,6 +58,6 @@ private struct Triangle: Shape {
 #Preview {
     ZStack {
         Color.gray
-        HaloBubble(text: "Hello from Halo 👋")
+        HaloBubble(profile: HaloProfile.cast[0])
     }
 }

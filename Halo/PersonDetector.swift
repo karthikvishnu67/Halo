@@ -31,6 +31,11 @@ final class PersonDetector {
     private(set) var people: [TrackedPerson] = []
 
     @ObservationIgnored private let tracker = PersonTracker()
+    @ObservationIgnored private let profiles = ProfileDirectory()
+
+    func profile(for id: Int) -> HaloProfile {
+        profiles.profile(for: id)
+    }
 
     /// Detection is slower than the camera's frame rate. Rather than letting
     /// frames queue up (which shows as lag), we keep exactly one request in
@@ -77,6 +82,8 @@ final class PersonDetector {
     }
 
     private func publish(_ found: [DetectedPerson]) {
-        people = tracker.update(with: found)
+        let tracked = tracker.update(with: found)
+        profiles.update(for: tracked)
+        people = tracked
     }
 }

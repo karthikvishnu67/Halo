@@ -1,0 +1,58 @@
+//
+//  HaloProfile.swift
+//  Halo
+//
+//  Stand-in identities until real opted-in users exist.
+//
+
+/// What a person is broadcasting: who they are and what they're signalling.
+struct HaloProfile {
+    let name: String
+    let message: String
+
+    /// A small fake cast, so multiple people on screen are distinguishable.
+    ///
+    /// Real profiles arrive in V2, when a person's device broadcasts its own
+    /// presence. Until then this is theatre: the app has no idea who anyone is.
+    static let cast: [HaloProfile] = [
+        HaloProfile(name: "Maya", message: "Robotics • Music"),
+        HaloProfile(name: "Arjun", message: "Looking for a chess game"),
+        HaloProfile(name: "Priya", message: "Open to meeting people"),
+        HaloProfile(name: "Rohan", message: "Anyone going to the hackathon?"),
+        HaloProfile(name: "Ananya", message: "Free for coffee"),
+        HaloProfile(name: "Dev", message: "AI • Chess • Photography"),
+        HaloProfile(name: "Sara", message: "Just arrived"),
+        HaloProfile(name: "Ishaan", message: "Ask me about music"),
+    ]
+
+}
+
+/// Hands each tracked subject a profile, and keeps it while they stay on screen.
+///
+/// Assigning by `id % cast.count` was simpler but gave two people on screen the
+/// same name once ids passed the size of the cast. This hands out profiles
+/// nobody else currently visible is using instead.
+@MainActor
+final class ProfileDirectory {
+
+    private var assigned: [Int: Int] = [:]   // track id -> index into the cast
+
+    /// Called once per detection pass, before the UI reads anything.
+    func update(for people: [TrackedPerson]) {
+        // Subjects who are gone release their profile for reuse.
+        let live = Set(people.map(\.id))
+        assigned = assigned.filter { live.contains($0.key) }
+
+        for person in people where assigned[person.id] == nil {
+            let taken = Set(assigned.values)
+            let free = (0..<HaloProfile.cast.count).first { !taken.contains($0) }
+            // With more people on screen than cast members, duplicates are
+            // unavoidable — fall back to wrapping around.
+            assigned[person.id] = free ?? (person.id % HaloProfile.cast.count)
+        }
+    }
+
+    func profile(for id: Int) -> HaloProfile {
+        HaloProfile.cast[assigned[id] ?? 0]
+    }
+}
