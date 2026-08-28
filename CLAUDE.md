@@ -87,22 +87,85 @@ Conceptual, not rigid release numbers.
 | V3 | Dedicated wearable / pin as a presence beacon |
 | V4 | AR glasses / spatial computing |
 
-### Product decisions made (deliberately, not by default)
+### The design, and why — decided deliberately
 
-Halo's inspiration is the Finnish grocery store handing out pink carts to single
-shoppers: an opt-in, anonymous, ephemeral signal that a room full of people can
-read at a glance. The design follows from that.
+The inspiration is a Finnish grocery store that hands out pink carts to single
+shoppers. One bit of information, opt-in, anonymous, ephemeral, reversible — and
+a store with twenty pink carts is *not* cluttered, because it reads at a glance.
+Everything below follows from taking that seriously.
 
-- **Balloon by default, detail on attention.** Everyone in range keeps a presence;
-  tapping opens the message. Detail is *deferred*, never denied — a crowd of
-  balloons is glanceable in a way a crowd of text cards is not.
-- **The sender is never restricted.** Any content, Instagram-Notes style. The only
-  limit is size.
-- **The viewer is never overruled.** Their radius, their filter.
-- **Nobody is told they were looked at.** A glance should stay a glance.
-- **Halo does not carry messages.** Seeing a signal should make you walk over.
-  This also keeps the project clear of moderation, blocking and abuse reporting.
-- **Halos are not notifications.** They reward attention; they never demand it.
+**What a halo is**
+
+- A **signal, not a profile.** "Dancing Queen playing" or "free for coffee" beats
+  a bio. Signals describe a moment, and are ephemeral by default.
+- **Content is never restricted.** Text, a song, a joke, a meme, "CS • photography
+  • startups" if that is what someone wants. Instagram Notes, not a dating profile.
+  The only limit is **size** — a balloon must stay balloon-sized. That constraint
+  is what makes the medium work, and it is a limit on format, never on subject.
+
+**Visual language**
+
+- A **balloon on a string, tethered to the top of the head** — the cartoon
+  thought-cloud. The tether is not decoration: it makes ownership unambiguous when
+  several halos overlap.
+- **Physically plausible.** Size and string length scale with the person, so a
+  halo behaves like an object hanging above them rather than UI pasted on glass.
+  This is what makes it read as attached; it is also the same behaviour that
+  carries over to AR glasses.
+
+**The attention model — this is how clutter is solved**
+
+- **Balloon by default, message on attention.** Tap opens one halo; in glasses
+  this becomes gaze. One open at a time.
+- Detail is **deferred, never denied.** Nobody in range is hidden. A crowd of
+  balloons is glanceable where a crowd of text cards is not.
+- A radius filters the *street*; deferring detail handles the *room*. Both are
+  needed: with fifteen opted-in people inside a 10m radius at a hackathon, a
+  radius alone still produces a wall of text.
+
+Three dials, none of which overrides a person:
+
+| Dial | Controlled by |
+|---|---|
+| What I broadcast | the sender — unrestricted |
+| How far away I care about | the viewer — their radius |
+| How much renders at once | attention — look at someone, their halo opens |
+
+**Consent and etiquette**
+
+- **Opt-in only.** Someone without Halo is not blurred or anonymised, they are
+  *absent* from the system.
+- The camera answers **"where is a person"**, never "who is this person". No
+  facial recognition, as an architectural commitment.
+- **No read receipts.** Nobody is told their halo was looked at. A glance should
+  stay a glance rather than become a staring contest.
+- **Halo carries no messages.** Seeing a signal should make you walk over and
+  speak. This is a product decision first, and it also keeps the project clear of
+  messaging, blocking, moderation and abuse reporting.
+- **Not always on.** Halos appear when you open the app (or accept in glasses),
+  not permanently in your peripheral vision.
+- **You can see your own halo** by looking up — how you know what you are
+  broadcasting.
+- **Halos never demand attention.** No pings, no flashes. Only what you are facing
+  is visible, so field of view is a natural rate limiter and nobody can scan a
+  room from behind.
+- **Seamless.** Halos fade in and out as people enter and leave range. If it feels
+  like an app updating a list, it is wrong.
+
+### Open questions — not yet decided
+
+- **Memory across a glance away.** Turn your head and back: is that the same
+  person? Today the track dies and the profile changes. In AR this is world
+  anchoring — remembering a *location*, which is memory the privacy principles
+  permit, unlike remembering a face.
+- **Where real distance comes from.** Apparent size is the V1 approximation. Later:
+  BLE signal strength (noisy, no direction), UWB (precise distance *and*
+  direction, needs BLE to discover first), or depth sensing.
+- **The association problem — the genuinely unsolved part.** The camera yields
+  bodies on screen; the radio yields opted-in users nearby. Matching them is hard
+  when two users are the same distance away. Options: correlate how distances
+  change over time, use UWB direction, or ask the viewer to confirm.
+- **Expiry semantics** for ephemeral signals: minutes, an event, leaving a place.
 
 ### V1 milestones — do these one at a time
 
