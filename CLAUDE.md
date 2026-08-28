@@ -29,14 +29,19 @@ Halo/
     ├── CameraManager.swift   # AVCaptureSession: permission, config, start/stop
     ├── CameraPreview.swift   # AVCaptureVideoPreviewLayer in SwiftUI + coordinate conversion
     ├── FrameForwarder.swift  # NSObject delegate adapter for video frames
-    ├── PersonDetector.swift  # Vision DetectHumanRectanglesRequest, one request in flight
-    ├── PersonTracker.swift   # frame-to-frame identity + exponential smoothing
-    ├── HaloBubble.swift      # the bubble view
+    ├── PersonDetector.swift  # Vision body pose -> box + head point, one request in flight
+    ├── PersonTracker.swift   # frame-to-frame identity, adaptive smoothing, prediction
+    ├── HaloProfile.swift     # fake cast + collision-free profile assignment
+    ├── HaloView.swift        # balloon, tether, open/closed state
+    ├── HaloBubble.swift      # the opened message card
     └── Assets.xcassets/
 ```
 
-**Next: V1.7** — verify multiple people get independent bubbles, then the V1.5
-simulated social layer (distinct fake profiles per track).
+V1 is complete. Halos are now balloons on a string, tethered to the head Vision
+reports, opening into the person's message on tap.
+
+**Next:** distance estimation from apparent size (the viewer's radius dial), and
+letting the user set their own halo instead of a hardcoded cast.
 
 ### Hard-won details worth not rediscovering
 
@@ -51,8 +56,22 @@ simulated social layer (distinct fake profiles per track).
 - **The project defaults every type to `@MainActor`** (`SWIFT_DEFAULT_ACTOR_ISOLATION`),
   so AVFoundation delegates called on background queues must be explicitly
   `nonisolated`.
-- **Smoothing is a dial, not a fact.** `PersonTracker.smoothing = 0.35` trades jitter
-  against lag; measured 0.0200 → 0.0043 jitter for 0.037 lag on a brisk walker.
+- **Smoothing adapts to speed, and that needs a filtered velocity *vector*.** One
+  fixed constant cannot both steady a still person and keep up with a walking one.
+  Filtering the step *size* fails: jitter alternates direction, so a shivering
+  detection reads as a sprint and the filter opens right up. Filtering the vector
+  cancels jitter and accumulates real movement. With prediction on top, measured
+  0.0029 twitch standing still and 0.0027 lag walking — better than the fixed
+  filter managed at either.
+- **Head position must come from joints, not the box.** The top-centre of a
+  bounding box is only the head for someone standing upright; for a person
+  reclining on a sofa it is a point in mid-air. `DetectHumanBodyPoseRequest`
+  gives real head joints, and ran *faster* in practice (15-30 passes/s).
+- **Detectors report nested duplicate boxes** for one person, especially when
+  seated. IoU misses these (a real pair scored 0.284, under the match threshold);
+  suppress on how much of the smaller box lies inside the larger.
+- **Detection is unreliable in dim rooms** regardless of request type — verified
+  by running both Vision requests over captured frames.
 
 ## Roadmap
 
@@ -67,6 +86,23 @@ Conceptual, not rigid release numbers.
 | V2.5 | Better spatial positioning and interaction |
 | V3 | Dedicated wearable / pin as a presence beacon |
 | V4 | AR glasses / spatial computing |
+
+### Product decisions made (deliberately, not by default)
+
+Halo's inspiration is the Finnish grocery store handing out pink carts to single
+shoppers: an opt-in, anonymous, ephemeral signal that a room full of people can
+read at a glance. The design follows from that.
+
+- **Balloon by default, detail on attention.** Everyone in range keeps a presence;
+  tapping opens the message. Detail is *deferred*, never denied — a crowd of
+  balloons is glanceable in a way a crowd of text cards is not.
+- **The sender is never restricted.** Any content, Instagram-Notes style. The only
+  limit is size.
+- **The viewer is never overruled.** Their radius, their filter.
+- **Nobody is told they were looked at.** A glance should stay a glance.
+- **Halo does not carry messages.** Seeing a signal should make you walk over.
+  This also keeps the project clear of moderation, blocking and abuse reporting.
+- **Halos are not notifications.** They reward attention; they never demand it.
 
 ### V1 milestones — do these one at a time
 

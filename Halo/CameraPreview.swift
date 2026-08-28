@@ -42,6 +42,13 @@ final class PreviewLayerHandle {
                                  height: rect.width)
         return layer?.layerRectConverted(fromMetadataOutputRect: sensorSpace)
     }
+
+    /// Same conversion for a single point, so the head anchor lands in the
+    /// same space as the box.
+    func viewPoint(for point: CGPoint) -> CGPoint? {
+        viewRect(for: CGRect(origin: point, size: .zero))
+            .map { CGPoint(x: $0.midX, y: $0.midY) }
+    }
 }
 
 struct CameraPreview: UIViewRepresentable {

@@ -44,17 +44,21 @@ struct ContentView: View {
     private var halos: some View {
         GeometryReader { geometry in
             ForEach(camera.detector.people) { person in
-                if let rect = previewHandle.viewRect(for: person.smoothedBox) {
+                if let rect = previewHandle.viewRect(for: person.smoothedBox),
+                   let head = previewHandle.viewPoint(for: person.displayHead) {
                     HaloView(profile: camera.detector.profile(for: person.id),
-                             headPoint: CGPoint(x: rect.midX, y: rect.minY),
+                             headPoint: head,
                              personHeight: rect.height,
                              scale: scale(for: rect),
                              isOpen: openedTrackID == person.id,
                              screenWidth: geometry.size.width,
                              onTap: { toggle(person.id) })
-                        // Detection passes land irregularly, so glide between
-                        // them instead of snapping to each new position.
-                        .animation(.smooth(duration: 0.25), value: rect)
+                        // Just long enough to bridge the gap between detection
+                        // passes (~15 a second). Longer than that and the halo
+                        // is always animating towards a position that has
+                        // already been superseded, which reads as lag.
+                        .animation(.smooth(duration: 0.1), value: rect)
+                        .animation(.smooth(duration: 0.1), value: head)
                 }
             }
         }
@@ -73,7 +77,8 @@ struct ContentView: View {
     }
 
     private var detectionCount: some View {
-        Text("\(camera.detector.people.count) tracked")
+        Text(String(format: "%d tracked · %.0f/s",
+                    camera.detector.people.count, camera.detector.passesPerSecond))
             .font(.caption.monospaced())
             .foregroundStyle(.white)
             .padding(.horizontal, 10)
