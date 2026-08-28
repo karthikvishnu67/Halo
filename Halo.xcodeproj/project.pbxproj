@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		A110000B000000000000E571 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5BC1E64B3040A25E00369D0D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5BC1E6523040A25E00369D0D;
+			remoteInfo = Halo;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		5BC1E6533040A25E00369D0D /* Halo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Halo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1100003000000000000E571 /* HaloTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HaloTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +27,22 @@
 			path = Halo;
 			sourceTree = "<group>";
 		};
+		A1100002000000000000E571 /* HaloTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HaloTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		5BC1E6503040A25E00369D0D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1100005000000000000E571 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				5BC1E6553040A25E00369D0D /* Halo */,
+				A1100002000000000000E571 /* HaloTests */,
 				5BC1E6543040A25E00369D0D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				5BC1E6533040A25E00369D0D /* Halo.app */,
+				A1100003000000000000E571 /* HaloTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +95,29 @@
 			productReference = 5BC1E6533040A25E00369D0D /* Halo.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A1100001000000000000E571 /* HaloTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1100007000000000000E571 /* Build configuration list for PBXNativeTarget "HaloTests" */;
+			buildPhases = (
+				A1100004000000000000E571 /* Sources */,
+				A1100005000000000000E571 /* Frameworks */,
+				A1100006000000000000E571 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A110000A000000000000E571 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A1100002000000000000E571 /* HaloTests */,
+			);
+			name = HaloTests;
+			packageProductDependencies = (
+			);
+			productName = HaloTests;
+			productReference = A1100003000000000000E571 /* HaloTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +130,10 @@
 				TargetAttributes = {
 					5BC1E6523040A25E00369D0D = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					A1100001000000000000E571 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = 5BC1E6523040A25E00369D0D;
 					};
 				};
 			};
@@ -100,12 +152,20 @@
 			projectRoot = "";
 			targets = (
 				5BC1E6523040A25E00369D0D /* Halo */,
+				A1100001000000000000E571 /* HaloTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		5BC1E6513040A25E00369D0D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1100006000000000000E571 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +182,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1100004000000000000E571 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A110000A000000000000E571 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5BC1E6523040A25E00369D0D /* Halo */;
+			targetProxy = A110000B000000000000E571 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		5BC1E65C3040A26000369D0D /* Debug */ = {
@@ -312,6 +387,50 @@
 			};
 			name = Release;
 		};
+		A1100008000000000000E571 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PZ2FYW6KHL;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = karthik.HaloTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Halo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Halo";
+			};
+			name = Debug;
+		};
+		A1100009000000000000E571 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PZ2FYW6KHL;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = karthik.HaloTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Halo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Halo";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -329,6 +448,15 @@
 			buildConfigurations = (
 				5BC1E65F3040A26000369D0D /* Debug */,
 				5BC1E6603040A26000369D0D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1100007000000000000E571 /* Build configuration list for PBXNativeTarget "HaloTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1100008000000000000E571 /* Debug */,
+				A1100009000000000000E571 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
