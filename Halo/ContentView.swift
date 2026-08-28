@@ -13,6 +13,10 @@ struct ContentView: View {
     /// Only one halo is open at a time — attention is the point.
     @State private var openedTrackID: Int?
 
+    /// The viewer's own dial: how far away they care about. Their filter,
+    /// their call — see the design notes in CLAUDE.md.
+    @AppStorage("haloRadiusMetres") private var radiusMetres: Double = 12
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -22,6 +26,7 @@ struct ContentView: View {
                 CameraPreview(session: camera.session, handle: previewHandle)
                     .overlay { halos }
                     .overlay(alignment: .top) { detectionCount }
+                    .overlay(alignment: .bottom) { radiusDial }
                     .ignoresSafeArea()
 
             case .idle:
@@ -40,28 +45,65 @@ struct ContentView: View {
         .task { await camera.start() }
     }
 
-    /// One halo per tracked subject.
+    /// One halo per tracked subject, inside the viewer's chosen radius.
     private var halos: some View {
         GeometryReader { geometry in
             ForEach(camera.detector.people) { person in
                 if let rect = previewHandle.viewRect(for: person.smoothedBox),
                    let head = previewHandle.viewPoint(for: person.displayHead) {
-                    HaloView(profile: camera.detector.profile(for: person.id),
-                             headPoint: head,
-                             personHeight: rect.height,
-                             scale: scale(for: rect),
-                             isOpen: openedTrackID == person.id,
-                             screenWidth: geometry.size.width,
-                             onTap: { toggle(person.id) })
-                        // Just long enough to bridge the gap between detection
-                        // passes (~15 a second). Longer than that and the halo
-                        // is always animating towards a position that has
-                        // already been superseded, which reads as lag.
-                        .animation(.smooth(duration: 0.1), value: rect)
-                        .animation(.smooth(duration: 0.1), value: head)
+                    let metres = distanceMetres(of: rect, in: geometry.size.height)
+
+                    // An unknown distance still shows a halo: "we can't tell"
+                    // must not quietly become "they're too far away".
+                    if metres.map({ $0 <= radiusMetres }) ?? true {
+                        HaloView(profile: camera.detector.profile(for: person.id),
+                                 distance: metres,
+                                 headPoint: head,
+                                 personHeight: rect.height,
+                                 scale: scale(for: rect),
+                                 isOpen: openedTrackID == person.id,
+                                 screenWidth: geometry.size.width,
+                                 onTap: { toggle(person.id) })
+                            // Just long enough to bridge the gap between
+                            // detection passes (15-30 a second). Longer, and
+                            // the halo is always animating towards a position
+                            // that has already been superseded — which is what
+                            // reads as lag.
+                            .animation(.smooth(duration: 0.1), value: rect)
+                            .animation(.smooth(duration: 0.1), value: head)
+                    }
                 }
             }
         }
+    }
+
+    /// Someone's apparent height gives a rough distance. Nil means we couldn't
+    /// tell — a seated person, or someone cut off by the frame — which must
+    /// stay distinct from "they are far away".
+    private func distanceMetres(of rect: CGRect, in screenHeight: CGFloat) -> Double? {
+        guard camera.fieldOfView > 0, screenHeight > 0 else { return nil }
+        let fraction = Double(rect.height / screenHeight)
+        guard let metres = DistanceEstimate.metres(heightFraction: fraction,
+                                                   fieldOfView: camera.fieldOfView),
+              DistanceEstimate.plausibleRange.contains(metres) else { return nil }
+        return metres
+    }
+
+    /// The viewer's radius. Deliberately theirs to set, not ours to decide.
+    private var radiusDial: some View {
+        VStack(spacing: 4) {
+            Text(radiusMetres >= 30 ? "everyone in view"
+                                    : String(format: "within %.0f m", radiusMetres))
+                .font(.caption.monospaced())
+                .foregroundStyle(.white)
+            Slider(value: $radiusMetres, in: 2...30)
+                .tint(.white)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.black.opacity(0.4), in: .rect(cornerRadius: 14))
+        .padding(.horizontal, 40)
+        .padding(.bottom, 40)
     }
 
     private func toggle(_ id: Int) {

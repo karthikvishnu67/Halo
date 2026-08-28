@@ -12,6 +12,7 @@ import SwiftUI
 /// detail is deferred until you attend to someone rather than hidden.
 struct HaloView: View {
     let profile: HaloProfile
+    let distance: Double?
     /// Top of the person's head, in view coordinates.
     let headPoint: CGPoint
     /// The person's on-screen height, which is what everything scales from:
@@ -49,7 +50,7 @@ struct HaloView: View {
             tether(to: anchor)
 
             if isOpen {
-                HaloBubble(profile: profile)
+                HaloBubble(profile: profile, distance: distance)
                     .fixedSize()
                     .scaleEffect(scale, anchor: .bottom)
                     .position(x: anchor.x, y: anchor.y - 28 * scale)

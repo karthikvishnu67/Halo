@@ -24,6 +24,10 @@ final class CameraManager {
 
     private(set) var status: Status = .idle
 
+    /// The camera's field of view in degrees, read from the active format
+    /// rather than assumed — it differs by device and by lens.
+    private(set) var fieldOfView: Double = 0
+
     /// The preview layer reads frames straight from this session.
     nonisolated let session = AVCaptureSession()
 
@@ -48,6 +52,7 @@ final class CameraManager {
 
     /// Only touched on `sessionQueue`.
     @ObservationIgnored nonisolated(unsafe) private var isConfigured = false
+    @ObservationIgnored nonisolated(unsafe) private var measuredFieldOfView: Double = 0
 
     func start() async {
         guard await hasPermission() else {
@@ -55,13 +60,14 @@ final class CameraManager {
             return
         }
 
-        let failure: String? = await withCheckedContinuation { continuation in
+        let result = await withCheckedContinuation { continuation in
             sessionQueue.async { [self] in
                 continuation.resume(returning: configureAndStart())
             }
         }
 
-        status = failure.map { .failed($0) } ?? .running
+        fieldOfView = result.fieldOfView
+        status = result.failure.map { .failed($0) } ?? .running
     }
 
     func stop() {
@@ -81,27 +87,32 @@ final class CameraManager {
         }
     }
 
-    /// Runs on `sessionQueue`. Returns a message describing what went wrong, or nil on success.
-    nonisolated private func configureAndStart() -> String? {
+    /// Runs on `sessionQueue`. Reports what went wrong, or nil on success,
+    /// along with the camera's field of view.
+    nonisolated private func configureAndStart() -> (failure: String?, fieldOfView: Double) {
+        var fieldOfView = self.measuredFieldOfView
+
         if !isConfigured {
             guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera,
                                                        for: .video,
                                                        position: .back) else {
-                return "No rear camera available on this device."
+                return ("No rear camera available on this device.", 0)
             }
+            fieldOfView = Double(camera.activeFormat.videoFieldOfView)
+            measuredFieldOfView = fieldOfView
 
             let input: AVCaptureDeviceInput
             do {
                 input = try AVCaptureDeviceInput(device: camera)
             } catch {
-                return "Couldn't open the rear camera: \(error.localizedDescription)"
+                return ("Couldn't open the rear camera: \(error.localizedDescription)", 0)
             }
 
             session.beginConfiguration()
             session.sessionPreset = .high
             guard session.canAddInput(input) else {
                 session.commitConfiguration()
-                return "Couldn't add the rear camera to the capture session."
+                return ("Couldn't add the rear camera to the capture session.", 0)
             }
             session.addInput(input)
 
@@ -112,7 +123,7 @@ final class CameraManager {
             videoOutput.setSampleBufferDelegate(frameForwarder, queue: videoQueue)
             guard session.canAddOutput(videoOutput) else {
                 session.commitConfiguration()
-                return "Couldn't add the video output to the capture session."
+                return ("Couldn't add the video output to the capture session.", 0)
             }
             session.addOutput(videoOutput)
 
@@ -122,6 +133,6 @@ final class CameraManager {
         }
 
         if !session.isRunning { session.startRunning() }
-        return nil
+        return (nil, fieldOfView)
     }
 }

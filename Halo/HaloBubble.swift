@@ -13,6 +13,8 @@ struct HaloBubble: View {
     static let maxWidth: CGFloat = 190
 
     let profile: HaloProfile
+    /// Rough, from apparent size. Omitted when it can't be estimated.
+    var distance: Double?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,6 +26,12 @@ struct HaloBubble: View {
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
+                if let distance {
+                    Text(distance < 10 ? String(format: "%.1f m away", distance)
+                                       : String(format: "%.0f m away", distance))
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.55))
+                }
             }
             .frame(maxWidth: Self.maxWidth)
             .padding(.horizontal, 14)
