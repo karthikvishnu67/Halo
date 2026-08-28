@@ -18,7 +18,7 @@ struct ContentView: View {
             switch camera.status {
             case .running:
                 CameraPreview(session: camera.session, handle: previewHandle)
-                    .overlay { detectionBoxes }
+                    .overlay { bubbles }
                     .overlay(alignment: .top) { detectionCount }
                     .ignoresSafeArea()
 
@@ -38,27 +38,35 @@ struct ContentView: View {
         .task { await camera.start() }
     }
 
-    /// V1.2 draws raw boxes. The Halo bubble replaces these in V1.5.
-    private var detectionBoxes: some View {
+    /// A bubble per tracked subject, floating just above their head.
+    private var bubbles: some View {
         ForEach(camera.detector.people) { person in
-            if let rect = previewHandle.viewRect(for: person.boundingBox) {
-                Rectangle()
-                    .strokeBorder(.green, lineWidth: 2)
-                    .overlay(alignment: .topLeading) {
-                        // The track id makes identity visible: it should stay
-                        // put while a person moves around the frame.
-                        Text("#\(person.id)")
-                            .font(.caption.monospaced().bold())
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(.green)
-                            .offset(y: -20)
-                    }
-                    .frame(width: rect.width, height: rect.height)
-                    .position(x: rect.midX, y: rect.midY)
+            if let rect = previewHandle.viewRect(for: person.smoothedBox) {
+                HaloBubble(text: "Hello from Halo 👋")
+                    .fixedSize()
+                    .scaleEffect(scale(for: rect), anchor: .bottom)
+                    .position(x: rect.midX, y: bubbleY(above: rect))
+                    // Detection passes land irregularly, so glide between them
+                    // instead of snapping to each new position.
+                    .animation(.smooth(duration: 0.25), value: rect)
             }
         }
+    }
+
+    /// The top of the bounding box is roughly the top of the head, so the
+    /// bubble sits a little above that rather than at the person's centre.
+    /// The gap scales with the person so it looks constant as they approach.
+    /// Clamped so someone close to the camera doesn't push it off-screen.
+    private func bubbleY(above rect: CGRect) -> CGFloat {
+        max(rect.minY - 34 * scale(for: rect), 60)
+    }
+
+    /// A nearer person fills more of the frame, so their bubble grows with
+    /// them. Clamped at both ends: never unreadably small, never overwhelming.
+    private func scale(for rect: CGRect) -> CGFloat {
+        /// Roughly a person standing a few metres away, filling half the screen.
+        let referenceHeight: CGFloat = 420
+        return min(max(rect.height / referenceHeight, 0.7), 1.6)
     }
 
     private var detectionCount: some View {

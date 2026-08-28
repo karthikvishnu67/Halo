@@ -15,7 +15,11 @@ import CoreGraphics
 /// new id, by design — the app has no way to recognise anyone.
 struct TrackedPerson: Identifiable {
     let id: Int
+    /// The most recent raw detection — noisy, used for matching.
     var boundingBox: CGRect
+    /// The filtered box the UI draws, so a stationary person's bubble
+    /// stays put instead of shivering with the detector's noise.
+    var smoothedBox: CGRect
     var confidence: Float
     /// Consecutive detection passes in which this subject wasn't matched.
     var missedFrames: Int = 0
@@ -36,6 +40,11 @@ final class PersonTracker {
     /// than `missTolerance` so a brief dropout doesn't blink, while someone who
     /// actually left doesn't leave a box hanging in empty space.
     private let visibleAfterMisses = 2
+
+    /// How far each new detection pulls the smoothed box towards itself.
+    /// Lower is steadier but lags further behind a moving person; this is the
+    /// trade-off worth tuning by eye on a real phone.
+    private let smoothing: CGFloat = 0.35
 
     private var tracks: [TrackedPerson] = []
     private var nextID = 1
@@ -63,7 +72,10 @@ final class PersonTracker {
             guard unmatchedTracks.contains(pair.track),
                   unmatchedDetections.contains(pair.detection) else { continue }
 
-            tracks[pair.track].boundingBox = detections[pair.detection].boundingBox
+            let measured = detections[pair.detection].boundingBox
+            tracks[pair.track].boundingBox = measured
+            tracks[pair.track].smoothedBox = blend(tracks[pair.track].smoothedBox,
+                                                   towards: measured)
             tracks[pair.track].confidence = detections[pair.detection].confidence
             tracks[pair.track].missedFrames = 0
 
@@ -73,8 +85,11 @@ final class PersonTracker {
 
         // A detection that matched nothing is someone new.
         for d in unmatchedDetections.sorted() {
+            // A new subject starts where they were seen, not blended from
+            // nowhere, otherwise the first bubble flies in from the corner.
             tracks.append(TrackedPerson(id: nextID,
                                         boundingBox: detections[d].boundingBox,
+                                        smoothedBox: detections[d].boundingBox,
                                         confidence: detections[d].confidence))
             nextID += 1
         }
@@ -88,6 +103,18 @@ final class PersonTracker {
         // Everything above stays in `tracks` so it can be re-matched; only
         // recently-seen subjects are handed to the UI.
         return tracks.filter { $0.missedFrames <= visibleAfterMisses }
+    }
+
+    /// Exponential smoothing, applied per edge of the box so position and
+    /// size are filtered together.
+    private func blend(_ current: CGRect, towards measured: CGRect) -> CGRect {
+        func ease(_ from: CGFloat, _ to: CGFloat) -> CGFloat {
+            from + (to - from) * smoothing
+        }
+        return CGRect(x: ease(current.minX, measured.minX),
+                      y: ease(current.minY, measured.minY),
+                      width: ease(current.width, measured.width),
+                      height: ease(current.height, measured.height))
     }
 
     private func intersectionOverUnion(_ a: CGRect, _ b: CGRect) -> CGFloat {

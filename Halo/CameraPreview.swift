@@ -27,9 +27,20 @@ final class CameraPreviewUIView: UIView {
 final class PreviewLayerHandle {
     fileprivate weak var layer: AVCaptureVideoPreviewLayer?
 
-    /// `rect` is normalized 0-1 with a top-left origin.
+    /// `rect` is normalized 0-1 with a top-left origin, in the upright
+    /// portrait space Vision reports.
+    ///
+    /// AVFoundation's "metadata output" space is defined in the camera
+    /// sensor's own landscape orientation, and `layerRectConverted` rotates it
+    /// into portrait itself. Passing an already-upright rect therefore rotates
+    /// twice, which put every box to the right of the person and too short.
+    /// Rotating back to sensor space first cancels that out.
     func viewRect(for rect: CGRect) -> CGRect? {
-        layer?.layerRectConverted(fromMetadataOutputRect: rect)
+        let sensorSpace = CGRect(x: rect.minY,
+                                 y: 1 - rect.maxX,
+                                 width: rect.height,
+                                 height: rect.width)
+        return layer?.layerRectConverted(fromMetadataOutputRect: sensorSpace)
     }
 }
 
