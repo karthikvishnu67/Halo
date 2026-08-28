@@ -14,22 +14,45 @@ The long-term north star is AR glasses where digital presence feels like another
 reality. **That vision must not leak into what we build this week.** The single most important
 instruction in this file is: *keep the current version small.*
 
-## Status: V0 → starting V1.1
+## Status: V1.1–V1.6 done, V1.7 next
 
-The repo is still the default SwiftUI template ("Hello, world!"). Nothing product-specific
-has been written yet.
+The core V1 loop works on device: rear camera → Vision person detection →
+IoU-based tracking with stable ids → a smoothed bubble floating above each
+person's head, scaling with their distance.
 
 ```text
 Halo/
 ├── Halo.xcodeproj/
 └── Halo/
-    ├── HaloApp.swift      # @main App, WindowGroup { ContentView() }
-    ├── ContentView.swift  # default template view
+    ├── HaloApp.swift         # @main App
+    ├── ContentView.swift     # full-screen preview + bubble overlay
+    ├── CameraManager.swift   # AVCaptureSession: permission, config, start/stop
+    ├── CameraPreview.swift   # AVCaptureVideoPreviewLayer in SwiftUI + coordinate conversion
+    ├── FrameForwarder.swift  # NSObject delegate adapter for video frames
+    ├── PersonDetector.swift  # Vision DetectHumanRectanglesRequest, one request in flight
+    ├── PersonTracker.swift   # frame-to-frame identity + exponential smoothing
+    ├── HaloBubble.swift      # the bubble view
     └── Assets.xcassets/
 ```
 
-**Immediate objective: get the rear camera feed rendering full-screen in the app.**
-Not detection. Not tracking. Not bubbles. Just the camera.
+**Next: V1.7** — verify multiple people get independent bubbles, then the V1.5
+simulated social layer (distinct fake profiles per track).
+
+### Hard-won details worth not rediscovering
+
+- **Coordinate conversion.** Vision reports upright portrait rects; AVFoundation's
+  metadata output space is the sensor's *landscape* space, and
+  `layerRectConverted(fromMetadataOutputRect:)` rotates into portrait itself. Rects
+  must be rotated back into sensor space before that call or everything is rotated
+  twice. See `PreviewLayerHandle.viewRect(for:)`.
+- **`@Observable` rewrites stored properties** into tracked computed ones, which
+  silently defeats `nonisolated(unsafe)`. Anything the UI doesn't read needs
+  `@ObservationIgnored`.
+- **The project defaults every type to `@MainActor`** (`SWIFT_DEFAULT_ACTOR_ISOLATION`),
+  so AVFoundation delegates called on background queues must be explicitly
+  `nonisolated`.
+- **Smoothing is a dial, not a fact.** `PersonTracker.smoothing = 0.35` trades jitter
+  against lag; measured 0.0200 → 0.0043 jitter for 0.037 lag on a brisk walker.
 
 ## Roadmap
 
@@ -38,7 +61,7 @@ Conceptual, not rigid release numbers.
 | Version | Proves |
 |---|---|
 | V0 | Xcode + Swift + Git + device deployment work *(done)* |
-| **V1** | **Camera → person detection → tracking → bubble attached to a person** |
+| **V1** | **Camera → person detection → tracking → bubble attached to a person** *(1.1–1.6 done)* |
 | V1.5 | Multiple people with simulated local profiles |
 | V2 | Real users, opt-in nearby presence, some networking |
 | V2.5 | Better spatial positioning and interaction |
@@ -47,17 +70,17 @@ Conceptual, not rigid release numbers.
 
 ### V1 milestones — do these one at a time
 
-- **V1.1 Camera** — rear camera fills the screen, permission handled. Nothing else.
-- **V1.2 Detection** — detect people in the feed; visualizing raw bounding boxes is fine.
-- **V1.3 Tracking** — follow a detected person across frames without re-detecting blindly
-  every frame. Test: walking left/right, toward/away, partial occlusion, multiple people,
-  camera movement.
-- **V1.4 Head position** — derive a point above the head from the box; the bubble is *not*
-  anchored at the person's center.
-- **V1.5 Bubble UI** — one simple, readable SwiftUI bubble. No visual complexity.
-- **V1.6 Stability** — smooth/filter the position. Goal is "the bubble belongs to the
-  person", not mathematically perfect tracking.
-- **V1.7 Multiple people** — independent bubbles per tracked subject.
+- ~~**V1.1 Camera**~~ — done.
+- ~~**V1.2 Detection**~~ — done, `DetectHumanRectanglesRequest`.
+- ~~**V1.3 Tracking**~~ — done, IoU association with a 2-pass visible window and an
+  8-pass retirement window. Not yet stress-tested on people crossing paths, where
+  geometry-only matching is expected to swap ids; the fix would be appearance
+  (`TrackObjectRequest`) if it turns out to matter.
+- ~~**V1.4 Head position**~~ — done, anchored to the top of the box.
+- ~~**V1.5 Bubble UI**~~ — done.
+- ~~**V1.6 Stability**~~ — done, exponential smoothing plus SwiftUI animation.
+- **V1.7 Multiple people** — the tracker and UI already handle N subjects; needs
+  verifying with several people in frame.
 
 ### V1 explicitly does NOT need
 
