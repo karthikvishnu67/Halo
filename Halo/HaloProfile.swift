@@ -5,24 +5,32 @@
 //  Stand-in identities until real opted-in users exist.
 //
 
+import SwiftUI
+
 /// What a person is broadcasting: who they are and what they're signalling.
+///
+/// Content is deliberately unconstrained — a name, a status, a song, a joke.
+/// The only limit is size: a balloon has to stay balloon-sized.
 struct HaloProfile {
     let name: String
     let message: String
+    /// Colours the closed balloon, so several people are distinguishable at a
+    /// glance without opening anything. Per-person decoration, not a category.
+    let tint: Color
 
     /// A small fake cast, so multiple people on screen are distinguishable.
     ///
     /// Real profiles arrive in V2, when a person's device broadcasts its own
     /// presence. Until then this is theatre: the app has no idea who anyone is.
     static let cast: [HaloProfile] = [
-        HaloProfile(name: "Maya", message: "Robotics • Music"),
-        HaloProfile(name: "Arjun", message: "Looking for a chess game"),
-        HaloProfile(name: "Priya", message: "Open to meeting people"),
-        HaloProfile(name: "Rohan", message: "Anyone going to the hackathon?"),
-        HaloProfile(name: "Ananya", message: "Free for coffee"),
-        HaloProfile(name: "Dev", message: "AI • Chess • Photography"),
-        HaloProfile(name: "Sara", message: "Just arrived"),
-        HaloProfile(name: "Ishaan", message: "Ask me about music"),
+        HaloProfile(name: "Maya", message: "Robotics • Music", tint: .pink),
+        HaloProfile(name: "Arjun", message: "Looking for a chess game", tint: .orange),
+        HaloProfile(name: "Priya", message: "Open to meeting people", tint: .mint),
+        HaloProfile(name: "Rohan", message: "Anyone going to the hackathon?", tint: .yellow),
+        HaloProfile(name: "Ananya", message: "Free for coffee", tint: .cyan),
+        HaloProfile(name: "Dev", message: "AI • Chess • Photography", tint: .purple),
+        HaloProfile(name: "Sara", message: "Just arrived", tint: .green),
+        HaloProfile(name: "Ishaan", message: "Ask me about music", tint: .blue),
     ]
 
 }

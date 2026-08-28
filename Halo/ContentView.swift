@@ -10,6 +10,8 @@ import SwiftUI
 struct ContentView: View {
     @State private var camera = CameraManager()
     @State private var previewHandle = PreviewLayerHandle()
+    /// Only one halo is open at a time — attention is the point.
+    @State private var openedTrackID: Int?
 
     var body: some View {
         ZStack {
@@ -18,7 +20,7 @@ struct ContentView: View {
             switch camera.status {
             case .running:
                 CameraPreview(session: camera.session, handle: previewHandle)
-                    .overlay { bubbles }
+                    .overlay { halos }
                     .overlay(alignment: .top) { detectionCount }
                     .ignoresSafeArea()
 
@@ -38,16 +40,18 @@ struct ContentView: View {
         .task { await camera.start() }
     }
 
-    /// A bubble per tracked subject, floating just above their head.
-    private var bubbles: some View {
+    /// One halo per tracked subject.
+    private var halos: some View {
         GeometryReader { geometry in
             ForEach(camera.detector.people) { person in
                 if let rect = previewHandle.viewRect(for: person.smoothedBox) {
-                    HaloBubble(profile: camera.detector.profile(for: person.id))
-                        .fixedSize()
-                        .scaleEffect(scale(for: rect), anchor: .bottom)
-                        .position(x: bubbleX(above: rect, screenWidth: geometry.size.width),
-                                  y: bubbleY(above: rect))
+                    HaloView(profile: camera.detector.profile(for: person.id),
+                             headPoint: CGPoint(x: rect.midX, y: rect.minY),
+                             personHeight: rect.height,
+                             scale: scale(for: rect),
+                             isOpen: openedTrackID == person.id,
+                             screenWidth: geometry.size.width,
+                             onTap: { toggle(person.id) })
                         // Detection passes land irregularly, so glide between
                         // them instead of snapping to each new position.
                         .animation(.smooth(duration: 0.25), value: rect)
@@ -56,24 +60,12 @@ struct ContentView: View {
         }
     }
 
-    /// Centred over the person, but pulled back inside the screen so someone
-    /// near the edge doesn't get half a bubble.
-    private func bubbleX(above rect: CGRect, screenWidth: CGFloat) -> CGFloat {
-        let halfBubble = HaloBubble.maxWidth / 2 * scale(for: rect)
-        let margin: CGFloat = 8
-        return min(max(rect.midX, halfBubble + margin), screenWidth - halfBubble - margin)
+    private func toggle(_ id: Int) {
+        openedTrackID = (openedTrackID == id) ? nil : id
     }
 
-    /// The top of the bounding box is roughly the top of the head, so the
-    /// bubble sits a little above that rather than at the person's centre.
-    /// The gap scales with the person so it looks constant as they approach.
-    /// Clamped so someone close to the camera doesn't push it off-screen.
-    private func bubbleY(above rect: CGRect) -> CGFloat {
-        max(rect.minY - 34 * scale(for: rect), 60)
-    }
-
-    /// A nearer person fills more of the frame, so their bubble grows with
-    /// them. Clamped at both ends: never unreadably small, never overwhelming.
+    /// A nearer person fills more of the frame, so their halo grows with them.
+    /// Clamped at both ends: never unreadably small, never overwhelming.
     private func scale(for rect: CGRect) -> CGFloat {
         /// Roughly a person standing a few metres away, filling half the screen.
         let referenceHeight: CGFloat = 420

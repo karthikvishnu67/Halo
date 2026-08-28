@@ -74,11 +74,37 @@ final class PersonDetector {
                     )
                 }
 
-                await self.publish(found)
+                await self.publish(self.suppressDuplicates(found))
             } catch {
                 await self.publish([])
             }
         }
+    }
+
+    /// Vision sometimes reports a smaller box nested inside a larger one for
+    /// the same person — common when they're seated rather than standing.
+    /// Left alone, each box becomes its own track and the person sprouts a
+    /// second balloon.
+    nonisolated func suppressDuplicates(_ people: [DetectedPerson]) -> [DetectedPerson] {
+        var kept: [DetectedPerson] = []
+        for candidate in people.sorted(by: { $0.confidence > $1.confidence }) {
+            let alreadyCovered = kept.contains {
+                containment(candidate.boundingBox, $0.boundingBox) > 0.6
+            }
+            if !alreadyCovered { kept.append(candidate) }
+        }
+        return kept
+    }
+
+    /// How much of the *smaller* box lies inside the other. Intersection over
+    /// union misses this case: a small box fully inside a big one can score
+    /// under 0.3 while being entirely redundant. This scores it 1.0.
+    nonisolated private func containment(_ a: CGRect, _ b: CGRect) -> CGFloat {
+        let overlap = a.intersection(b)
+        guard !overlap.isNull else { return 0 }
+        let smaller = min(a.width * a.height, b.width * b.height)
+        guard smaller > 0 else { return 0 }
+        return (overlap.width * overlap.height) / smaller
     }
 
     private func publish(_ found: [DetectedPerson]) {
