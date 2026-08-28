@@ -32,6 +32,11 @@ Halo/
     ├── PersonDetector.swift  # Vision body pose -> box + head point, one request in flight
     ├── PersonTracker.swift   # frame-to-frame identity, adaptive smoothing, prediction
     ├── HaloProfile.swift     # fake cast + collision-free profile assignment
+    ├── HaloPresence.swift    # a broadcast heard over the radio
+    ├── PresenceMatcher.swift # joins broadcasts to bodies; abstains when unsure
+    ├── RadioDistanceFilter.swift  # de-biases obstructed radio distance
+    ├── BroadcastSession.swift     # what you are broadcasting, and until when
+    ├── DistanceEstimate.swift     # apparent size -> metres
     ├── HaloView.swift        # balloon, tether, open/closed state
     ├── HaloBubble.swift      # the opened message card
     └── Assets.xcassets/
@@ -72,6 +77,16 @@ letting the user set their own halo instead of a hardcoded cast.
   suppress on how much of the smaller box lies inside the larger.
 - **Detection is unreliable in dim rooms** regardless of request type — verified
   by running both Vision requests over captured frames.
+- **Radio and camera arrive at wildly different rates**, so the matcher works in
+  seconds, not update counts: 15-30 camera passes a second against perhaps one
+  advert a second from a backgrounded phone. Treating those as equal ticks makes
+  the same movement look ten times faster from one sense than the other.
+- **Radio distance error is asymmetric.** Obstruction only ever reads *longer*,
+  so a low quantile of recent readings beats an average. But that argument only
+  holds for readings of the same true distance — applied naively across a window
+  in which someone is walking, it reports where they were earliest and made the
+  matcher badly under-confident. Project readings forward by the estimated speed
+  first, then take the quantile.
 
 ## Roadmap
 
@@ -151,6 +166,53 @@ Three dials, none of which overrides a person:
   room from behind.
 - **Seamless.** Halos fade in and out as people enter and leave range. If it feels
   like an app updating a list, it is wrong.
+
+### V2: what the platform actually allows
+
+Checked against the iOS 26.2 SDK headers rather than from memory.
+
+- **ARKit is not an option for detection.** `ARFrame.detectedBody` is *singular* —
+  ARKit body tracking follows one person. Halo needs a crowd, so Vision stays the
+  detection layer. This is the concrete reason behind "don't reach for ARKit yet".
+- **Apple assumes a standard human too.** `ARBodyAnchor`'s skeleton is defined as
+  1.71m with an `estimatedScaleFactor` correction, which is the same assumption
+  `DistanceEstimate` makes with a smaller constant (a pose box runs eyes to
+  ankles, not head to toe).
+- **`sceneDepth` needs LiDAR**, i.e. Pro devices only. Not available on the test
+  iPhone 15, so apparent size remains the distance source.
+- **UWB is the eventual answer to matching.** `NearbyInteraction` gives `distance`,
+  `direction` and `horizontalAngle` to a peer, and `isCameraAssistanceEnabled`
+  (iOS 16+) fuses it with an `ARSession` you can supply. That turns matching from
+  "correlate noisy trajectories" into "which body lies along this ray". BLE is
+  still needed to discover peers first, so the matcher's design survives — UWB
+  becomes one more agreement term, and a decisive one.
+
+### V2: broadcasting while the app is closed
+
+The viewer must have Halo open — they are pointing a camera. The *broadcaster*
+is the hard case, and `CBPeripheralManager.h` is explicit about it:
+
+- Background advertising requires the **`bluetooth-peripheral`** background mode.
+  Without it a backgrounded app "will not be able to advertise anything".
+- In the background "the local name will not be used and all service UUIDs will
+  be placed in the **overflow area**", discoverable "only by an iOS device that
+  is explicitly scanning for them", and flagged as best-effort.
+- So the advert can only say *"a Halo user is here"*. The rotating id and the
+  halo content must be fetched over a brief GATT connection after discovery.
+- **A force-quit stops advertising outright.** There is no app-level fix, which
+  is why a broadcast simply ending is treated as ordinary, not exceptional.
+
+Battery is not the problem people expect: advertising is what BLE is designed
+for. The costly side is the viewer's camera, pose estimation and screen — and
+they opted into that by opening the app. The real costs are slower discovery
+(fewer distance samples for the matcher) and body absorption, which is worst
+exactly when a phone is in a pocket.
+
+**Decision: broadcasting is time-boxed** (`BroadcastSession`), not a switch left
+on. It matches what a halo is, it means you always know whether you are visible,
+and it bounds the radio cost. Every one of these constraints also dissolves with
+a dedicated pin — no app lifecycle, no force-quit, chest-mounted radio geometry —
+which is the engineering case for V3, separate from the aesthetic one.
 
 ### Open questions — not yet decided
 

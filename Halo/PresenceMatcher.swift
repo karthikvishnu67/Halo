@@ -17,6 +17,13 @@ import Foundation
 /// the one thing the design must never do. Everything below is biased
 /// accordingly: when two candidates are equally plausible, the matcher reports
 /// nothing rather than guessing.
+///
+/// It works in real time rather than in update counts, because the two sides
+/// arrive at wildly different rates. The camera produces 15-30 passes a second;
+/// a phone advertising from someone's pocket may be heard once a second, since
+/// iOS slows background advertising down. Treating those as equivalent ticks
+/// would make the same movement look ten times faster from one sense than the
+/// other.
 @MainActor
 final class PresenceMatcher {
 
@@ -48,35 +55,41 @@ final class PresenceMatcher {
     /// Radio distance is bad enough that a 3-4m disagreement is unremarkable.
     private let levelTolerance = 3.5
 
-    /// Movement per pass, where disagreement is far more meaningful.
-    private let trendTolerance = 0.35
+    /// Disagreement in *speed*, in metres per second, where a mismatch means
+    /// far more than a mismatch in absolute distance does.
+    private let trendTolerance = 0.5
 
     /// How much of the score trend evidence may claim, once there is enough
     /// motion for it to mean anything.
     private let trendShare = 0.6
 
-    /// Movement per pass at which trend evidence is fully informative.
-    private let significantMotion = 0.25
+    /// Speed at which trend evidence becomes fully informative.
+    private let significantMotion = 0.3
 
-    private let confidenceSmoothing = 0.25
-    private let trendSmoothing = 0.3
+    /// Nobody moves faster than this. A reading implying they did is noise —
+    /// the commonest radio failure — so it is clamped rather than believed.
+    /// Without this, one wild signal reads as a sprint and can shake a halo
+    /// off the person it had correctly settled on.
+    private let maxPlausibleSpeed = 3.5
 
-    /// Nobody moves this far between passes. A reading that implies they did
-    /// is noise — the commonest radio failure — so it is clamped rather than
-    /// believed. Without this, one wild signal reads as a sprint and can shake
-    /// a halo off the person it had correctly settled on.
-    private let maxPlausibleStep = 0.8
+    /// Time constants for the two running estimates. Expressed in seconds so
+    /// they mean the same thing whether updates arrive slowly or quickly.
+    private let confidenceTau: TimeInterval = 0.8
+    private let trendTau: TimeInterval = 1.5
+
+    /// Unheard for this long and a broadcast is treated as gone — the person
+    /// walked away, went behind a wall, or force-quit the app. iOS gives no
+    /// way to keep advertising through a force-quit, so this case is ordinary
+    /// rather than exceptional.
+    private let staleAfter: TimeInterval = 5
 
     /// Confidence needed to place a halo on someone for the first time.
     private let bindThreshold = 0.62
 
-    /// A much lower bar to *keep* an existing placement. This is safe because
-    /// a rival can only take the person by clearing the full bind threshold
-    /// and margin, and because the placement is tied to a tracked body: if
-    /// that person leaves, the track dies and the binding goes with it. So the
-    /// only thing a low bar risks is holding a placement that was originally
-    /// established on strong evidence — which is the safer default than
-    /// dropping and re-guessing.
+    /// A much lower bar to *keep* an existing placement. Safe because a rival
+    /// must clear the full bind threshold and margin to take the person, and
+    /// because a placement is tied to a tracked body: if they leave, the track
+    /// dies and the binding goes with it.
     private let holdThreshold = 0.28
 
     /// How far ahead of the runner-up the winner must be. This is what makes
@@ -84,13 +97,10 @@ final class PresenceMatcher {
     /// therefore no halo on either.
     private let requiredMargin = 0.12
 
-    /// Taking a placement away from an established one demands far more than
-    /// making a fresh one. When two people cross paths at the same distance,
-    /// the radio genuinely reports the wrong order for seconds at a time — the
-    /// evidence itself is ambiguous, and no scoring rule can recover truth
-    /// that isn't in the data. So the matcher holds what it decided when the
-    /// evidence *was* clear, and only revises on evidence far stronger than
-    /// the noise.
+    /// Taking a placement away from an established one demands far more. When
+    /// two people cross paths at the same distance the radio genuinely reports
+    /// them in the wrong order for seconds at a time, so the matcher holds what
+    /// it decided when the evidence was clear.
     private let stealMargin = 0.3
 
     // MARK: state
@@ -101,22 +111,44 @@ final class PresenceMatcher {
     }
 
     private var confidence: [PairKey: Double] = [:]
-    private var lastSubjectDistance: [Int: Double] = [:]
-    private var lastPresenceDistance: [String: Double] = [:]
-    private var subjectTrend: [Int: Double] = [:]
-    private var presenceTrend: [String: Double] = [:]
     private var bindings: [String: Int] = [:]
+
+    private var filters: [String: RadioDistanceFilter] = [:]
+    private var lastReadingAt: [String: TimeInterval] = [:]
+    private var lastPresenceDistance: [String: Double] = [:]
+    private var presenceSpeed: [String: Double] = [:]
+
+    private var lastSubjectDistance: [Int: Double] = [:]
+    private var lastSubjectAt: [Int: TimeInterval] = [:]
+    private var subjectSpeed: [Int: Double] = [:]
+
+    private var lastUpdateAt: TimeInterval?
 
     // MARK: matching
 
-    func update(subjects: [Subject], presences: [HaloPresence]) -> Outcome {
-        forgetDeparted(subjects: subjects, presences: presences)
-        updateTrends(subjects: subjects, presences: presences)
-        scorePairs(subjects: subjects, presences: presences)
+    /// - Parameter now: a monotonic clock in seconds (`ProcessInfo.systemUptime`
+    ///   in the app; a simulated counter in tests).
+    func update(subjects: [Subject],
+                presences: [HaloPresence],
+                now: TimeInterval) -> Outcome {
 
-        bindings = commitBindings(subjects: subjects, presences: presences)
+        let elapsed = lastUpdateAt.map { max(now - $0, 0) } ?? 0
+        lastUpdateAt = now
 
-        let byID = Dictionary(uniqueKeysWithValues: presences.map { ($0.id, $0) })
+        ingest(presences, at: now)
+
+        // A broadcast nobody has heard lately is gone, not merely unplaced.
+        let live = presences.filter { presence in
+            !(filters[presence.id]?.isStale(at: now, after: staleAfter) ?? true)
+        }
+
+        forgetDeparted(subjects: subjects, presences: live)
+        updateSubjectSpeeds(subjects, at: now)
+        scorePairs(subjects: subjects, presences: live, elapsed: elapsed, now: now)
+
+        bindings = commitBindings(subjects: subjects, presences: live)
+
+        let byID = Dictionary(uniqueKeysWithValues: live.map { ($0.id, $0) })
         let matched = bindings.compactMap { presenceID, trackID -> Match? in
             guard let presence = byID[presenceID] else { return nil }
             return Match(presence: presence,
@@ -127,60 +159,92 @@ final class PresenceMatcher {
         let placed = Set(bindings.keys)
 
         return Outcome(matched: matched.sorted { $0.trackID < $1.trackID },
-                       unplaced: presences.filter { !placed.contains($0.id) })
+                       unplaced: live.filter { !placed.contains($0.id) })
     }
 
-    /// How far each side has moved since the last pass, smoothed — a single
-    /// noisy step means little, a consistent drift means a lot.
-    private func updateTrends(subjects: [Subject], presences: [HaloPresence]) {
+    /// Feeds new radio readings into their filters. A presence may be reported
+    /// on every call while only being *heard* occasionally, so readings are
+    /// taken once, when they are actually new.
+    private func ingest(_ presences: [HaloPresence], at now: TimeInterval) {
+        for presence in presences {
+            guard lastReadingAt[presence.id] != presence.heardAt else { continue }
+
+            var filter = filters[presence.id] ?? RadioDistanceFilter()
+            filter.add(presence.rawDistance, at: presence.heardAt)
+            filters[presence.id] = filter
+
+            if let distance = filter.estimate(at: now, movingAt: presenceSpeed[presence.id] ?? 0) {
+                if let previous = lastPresenceDistance[presence.id],
+                   let previousAt = lastReadingAt[presence.id],
+                   presence.heardAt > previousAt {
+                    let gap = presence.heardAt - previousAt
+                    let speed = clampedSpeed((distance - previous) / gap)
+                    presenceSpeed[presence.id] = smooth(presenceSpeed[presence.id] ?? 0,
+                                                        towards: speed,
+                                                        over: gap,
+                                                        tau: trendTau)
+                }
+                lastPresenceDistance[presence.id] = distance
+            }
+            lastReadingAt[presence.id] = presence.heardAt
+        }
+    }
+
+    private func updateSubjectSpeeds(_ subjects: [Subject], at now: TimeInterval) {
         for subject in subjects {
             guard let distance = subject.distance else { continue }
-            if let last = lastSubjectDistance[subject.id] {
-                let previous = subjectTrend[subject.id] ?? 0
-                let step = clampedStep(distance - last)
-                subjectTrend[subject.id] = previous + (step - previous) * trendSmoothing
+
+            if let previous = lastSubjectDistance[subject.id],
+               let previousAt = lastSubjectAt[subject.id],
+               now > previousAt {
+                let gap = now - previousAt
+                let speed = clampedSpeed((distance - previous) / gap)
+                subjectSpeed[subject.id] = smooth(subjectSpeed[subject.id] ?? 0,
+                                                  towards: speed,
+                                                  over: gap,
+                                                  tau: trendTau)
             }
             lastSubjectDistance[subject.id] = distance
-        }
-
-        for presence in presences {
-            if let last = lastPresenceDistance[presence.id] {
-                let previous = presenceTrend[presence.id] ?? 0
-                let step = clampedStep(presence.estimatedDistance - last)
-                presenceTrend[presence.id] = previous + (step - previous) * trendSmoothing
-            }
-            lastPresenceDistance[presence.id] = presence.estimatedDistance
+            lastSubjectAt[subject.id] = now
         }
     }
 
-    private func scorePairs(subjects: [Subject], presences: [HaloPresence]) {
+    private func scorePairs(subjects: [Subject],
+                            presences: [HaloPresence],
+                            elapsed: TimeInterval,
+                            now: TimeInterval) {
         var seen: Set<PairKey> = []
 
         for subject in subjects {
             guard let cameraDistance = subject.distance else { continue }
 
             for presence in presences {
+                guard let radioDistance = filters[presence.id]?
+                    .estimate(at: now, movingAt: presenceSpeed[presence.id] ?? 0) else { continue }
+
                 let key = PairKey(presenceID: presence.id, trackID: subject.id)
                 seen.insert(key)
 
-                let level = agreement(abs(cameraDistance - presence.estimatedDistance),
+                let level = agreement(abs(cameraDistance - radioDistance),
                                       tolerance: levelTolerance)
 
-                let ourTrend = subjectTrend[subject.id] ?? 0
-                let theirTrend = presenceTrend[presence.id] ?? 0
-                let trend = agreement(abs(ourTrend - theirTrend), tolerance: trendTolerance)
+                let ourSpeed = subjectSpeed[subject.id] ?? 0
+                let theirSpeed = presenceSpeed[presence.id] ?? 0
+                let trend = agreement(abs(ourSpeed - theirSpeed), tolerance: trendTolerance)
 
                 // Trend evidence only counts to the extent that something is
                 // actually moving. Two stationary candidates "agree" perfectly
                 // on trend while telling us nothing, and treating that as
                 // evidence would manufacture confidence out of stillness.
-                let motion = max(abs(ourTrend), abs(theirTrend))
+                let motion = max(abs(ourSpeed), abs(theirSpeed))
                 let informative = min(motion / significantMotion, 1)
                 let share = trendShare * informative
                 let instant = level * (1 - share) + trend * share
 
-                let previous = confidence[key] ?? 0
-                confidence[key] = previous + (instant - previous) * confidenceSmoothing
+                confidence[key] = smooth(confidence[key] ?? 0,
+                                         towards: instant,
+                                         over: elapsed,
+                                         tau: confidenceTau)
             }
         }
 
@@ -188,7 +252,10 @@ final class PresenceMatcher {
         // score — a subject whose distance became unknowable shouldn't keep a
         // halo on the strength of stale agreement.
         for key in confidence.keys where !seen.contains(key) {
-            confidence[key] = (confidence[key] ?? 0) * (1 - confidenceSmoothing)
+            confidence[key] = smooth(confidence[key] ?? 0,
+                                     towards: 0,
+                                     over: elapsed,
+                                     tau: confidenceTau)
         }
     }
 
@@ -260,13 +327,29 @@ final class PresenceMatcher {
             livePresences.contains($0.key) && liveSubjects.contains($0.value)
         }
         lastSubjectDistance = lastSubjectDistance.filter { liveSubjects.contains($0.key) }
-        subjectTrend = subjectTrend.filter { liveSubjects.contains($0.key) }
+        lastSubjectAt = lastSubjectAt.filter { liveSubjects.contains($0.key) }
+        subjectSpeed = subjectSpeed.filter { liveSubjects.contains($0.key) }
+
+        filters = filters.filter { livePresences.contains($0.key) }
+        lastReadingAt = lastReadingAt.filter { livePresences.contains($0.key) }
         lastPresenceDistance = lastPresenceDistance.filter { livePresences.contains($0.key) }
-        presenceTrend = presenceTrend.filter { livePresences.contains($0.key) }
+        presenceSpeed = presenceSpeed.filter { livePresences.contains($0.key) }
     }
 
-    private func clampedStep(_ step: Double) -> Double {
-        min(max(step, -maxPlausibleStep), maxPlausibleStep)
+    /// Exponential smoothing where the weight depends on *time* passed, so the
+    /// same estimate behaves identically whether it is fed 30 times a second or
+    /// once a second.
+    private func smooth(_ current: Double,
+                        towards measured: Double,
+                        over elapsed: TimeInterval,
+                        tau: TimeInterval) -> Double {
+        guard elapsed > 0 else { return current }
+        let alpha = 1 - exp(-elapsed / tau)
+        return current + (measured - current) * alpha
+    }
+
+    private func clampedSpeed(_ speed: Double) -> Double {
+        min(max(speed, -maxPlausibleSpeed), maxPlausibleSpeed)
     }
 
     /// 1 when two readings agree exactly, falling off smoothly with disagreement.

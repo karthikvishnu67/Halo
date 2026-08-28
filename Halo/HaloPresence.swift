@@ -5,6 +5,8 @@
 //  Someone nearby who is broadcasting a halo.
 //
 
+import Foundation
+
 /// A broadcast heard over the radio — not yet attached to anyone on screen.
 ///
 /// The camera can only ever answer "where is a person". Whether that person
@@ -19,9 +21,15 @@ struct HaloPresence: Identifiable {
     /// What they chose to broadcast.
     let profile: HaloProfile
 
-    /// Metres, inferred from signal strength. Very rough — human bodies absorb
-    /// radio, so someone facing away can read twice as far as they are. Only
-    /// really trustworthy as a trend, which is why the matcher leans on how
-    /// this changes rather than on any single reading.
-    let estimatedDistance: Double
+    /// Metres, inferred from signal strength — before any filtering. Very
+    /// rough, and biased *long*: obstruction weakens a signal, which reads as
+    /// further away, while nothing makes someone read closer than they are.
+    /// `RadioDistanceFilter` exploits that asymmetry.
+    let rawDistance: Double
+
+    /// When this reading arrived, on a monotonic clock. Readings arrive
+    /// irregularly — many times a second from a foregrounded phone, perhaps
+    /// once a second from one advertising in someone's pocket — so the matcher
+    /// works in real time rather than counting updates.
+    let heardAt: TimeInterval
 }
