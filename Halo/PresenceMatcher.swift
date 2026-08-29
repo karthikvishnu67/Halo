@@ -55,16 +55,19 @@ final class PresenceMatcher {
     /// Radio distance is bad enough that a 3-4m disagreement is unremarkable.
     private let levelTolerance = 3.5
 
-    /// Disagreement in *speed*, in metres per second, where a mismatch means
-    /// far more than a mismatch in absolute distance does.
-    private let trendTolerance = 0.5
+    /// Disagreement in *speed*, in metres per second. Loose, because even a
+    /// slope fitted across several readings carries real error when each one
+    /// is metres out.
+    private let trendTolerance = 0.8
 
     /// How much of the score trend evidence may claim, once there is enough
     /// motion for it to mean anything.
     private let trendShare = 0.6
 
-    /// Speed at which trend evidence becomes fully informative.
-    private let significantMotion = 0.3
+    /// Speed at which trend evidence becomes fully informative. Set above the
+    /// speed that radio noise alone can fake, so that standing still never
+    /// looks like walking.
+    private let significantMotion = 0.7
 
     /// Nobody moves faster than this. A reading implying they did is noise —
     /// the commonest radio failure — so it is clamped rather than believed.
@@ -86,6 +89,16 @@ final class PresenceMatcher {
     /// Confidence needed to place a halo on someone for the first time.
     private let bindThreshold = 0.62
 
+    /// How long a broadcast must have been heard before it may be attributed
+    /// to anyone at all.
+    ///
+    /// Without this the matcher commits on its first couple of readings, when
+    /// the distance filter has had no chance to reject an obstructed one. In
+    /// testing that put a broadcast from someone 2m away onto a bystander at
+    /// 6m — a defensible inference from the evidence available, and exactly
+    /// the evidence that improves seconds later.
+    private let warmUp: TimeInterval = 2.5
+
     /// A much lower bar to *keep* an existing placement. Safe because a rival
     /// must clear the full bind threshold and margin to take the person, and
     /// because a placement is tied to a tracked body: if they leave, the track
@@ -101,6 +114,11 @@ final class PresenceMatcher {
     /// two people cross paths at the same distance the radio genuinely reports
     /// them in the wrong order for seconds at a time, so the matcher holds what
     /// it decided when the evidence was clear.
+    ///
+    /// Scaled by how well-established the incumbent actually is, though. A
+    /// placement whose own confidence has fallen well below the bar it was
+    /// created with has no claim to that protection — otherwise an early
+    /// mistake, made before the evidence matured, is defended forever.
     private let stealMargin = 0.3
 
     // MARK: state
@@ -172,20 +190,7 @@ final class PresenceMatcher {
             var filter = filters[presence.id] ?? RadioDistanceFilter()
             filter.add(presence.rawDistance, at: presence.heardAt)
             filters[presence.id] = filter
-
-            if let distance = filter.estimate(at: now, movingAt: presenceSpeed[presence.id] ?? 0) {
-                if let previous = lastPresenceDistance[presence.id],
-                   let previousAt = lastReadingAt[presence.id],
-                   presence.heardAt > previousAt {
-                    let gap = presence.heardAt - previousAt
-                    let speed = clampedSpeed((distance - previous) / gap)
-                    presenceSpeed[presence.id] = smooth(presenceSpeed[presence.id] ?? 0,
-                                                        towards: speed,
-                                                        over: gap,
-                                                        tau: trendTau)
-                }
-                lastPresenceDistance[presence.id] = distance
-            }
+            presenceSpeed[presence.id] = filter.speed(at: now)
             lastReadingAt[presence.id] = presence.heardAt
         }
     }
@@ -219,8 +224,7 @@ final class PresenceMatcher {
             guard let cameraDistance = subject.distance else { continue }
 
             for presence in presences {
-                guard let radioDistance = filters[presence.id]?
-                    .estimate(at: now, movingAt: presenceSpeed[presence.id] ?? 0) else { continue }
+                guard let radioDistance = filters[presence.id]?.estimate(at: now) else { continue }
 
                 let key = PairKey(presenceID: presence.id, trackID: subject.id)
                 seen.insert(key)
@@ -279,6 +283,13 @@ final class PresenceMatcher {
             let alreadyBound = bindings[key.presenceID] == key.trackID
             guard score >= (alreadyBound ? holdThreshold : bindThreshold) else { continue }
 
+            // A broadcast heard only moments ago cannot yet be attributed to
+            // anyone: its distance has not been filtered enough to trust.
+            if !alreadyBound {
+                let observed = filters[key.presenceID]?.observedSpan(at: lastUpdateAt ?? 0) ?? 0
+                guard observed >= warmUp else { continue }
+            }
+
             if !alreadyBound {
                 // Is this pair trying to displace an existing placement —
                 // either taking this broadcast off someone, or taking this
@@ -293,7 +304,8 @@ final class PresenceMatcher {
                                                                  trackID: key.trackID)] ?? 0)
                 }
                 if incumbent > 0 {
-                    guard score - incumbent >= stealMargin else { continue }
+                    let established = min(incumbent / bindThreshold, 1)
+                    guard score - incumbent >= stealMargin * established else { continue }
                 }
 
                 // The runner-up on *either* axis: another person this broadcast
@@ -335,6 +347,27 @@ final class PresenceMatcher {
         lastPresenceDistance = lastPresenceDistance.filter { livePresences.contains($0.key) }
         presenceSpeed = presenceSpeed.filter { livePresences.contains($0.key) }
     }
+
+    #if DEBUG
+    /// What the matcher currently believes, for diagnosing why a halo did or
+    /// didn't appear. Worth keeping: guessing at this cost more than one
+    /// wrong fix.
+    struct Snapshot {
+        let filtered: [String: Double]
+        let speeds: [String: Double]
+        let confidence: [String: Double]
+    }
+
+    func snapshot(at now: TimeInterval) -> Snapshot {
+        var filtered: [String: Double] = [:]
+        for (id, filter) in filters {
+            filtered[id] = filter.estimate(at: now)
+        }
+        let scores = Dictionary(uniqueKeysWithValues:
+            confidence.map { ("\($0.key.presenceID)->\($0.key.trackID)", $0.value) })
+        return Snapshot(filtered: filtered, speeds: presenceSpeed, confidence: scores)
+    }
+    #endif
 
     /// Exponential smoothing where the weight depends on *time* passed, so the
     /// same estimate behaves identically whether it is fed 30 times a second or

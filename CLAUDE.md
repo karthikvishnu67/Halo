@@ -36,6 +36,7 @@ Halo/
     ├── PresenceMatcher.swift # joins broadcasts to bodies; abstains when unsure
     ├── RadioDistanceFilter.swift  # de-biases obstructed radio distance
     ├── BroadcastSession.swift     # what you are broadcasting, and until when
+    ├── SimulatedRadio.swift       # fake broadcasts, so the matcher can be watched working
     ├── DistanceEstimate.swift     # apparent size -> metres
     ├── HaloView.swift        # balloon, tether, open/closed state
     ├── HaloBubble.swift      # the opened message card
@@ -81,6 +82,13 @@ letting the user set their own halo instead of a hardcoded cast.
   seconds, not update counts: 15-30 camera passes a second against perhaps one
   advert a second from a backgrounded phone. Treating those as equal ticks makes
   the same movement look ten times faster from one sense than the other.
+- **Distance alone cannot guarantee the right person gets the halo.** Heavy
+  obstruction can make someone 2m away read 5-6m, and if a bystander happens to
+  be standing at 6m, attributing the broadcast to them is a *correct* inference
+  from the available evidence. The defences are conservative ones: don't bind
+  until a broadcast has been observed for a couple of seconds, and don't let an
+  early binding defend itself once its own confidence has fallen. A real
+  guarantee needs a second discriminator, which is what UWB direction is for.
 - **Radio distance error is asymmetric.** Obstruction only ever reads *longer*,
   so a low quantile of recent readings beats an average. But that argument only
   holds for readings of the same true distance — applied naively across a window

@@ -13,7 +13,7 @@ import CoreGraphics
 /// The id is local and ephemeral: it means "the subject in slot 3 right now",
 /// never "this specific human". Walking out of frame and back in produces a
 /// new id, by design — the app has no way to recognise anyone.
-struct TrackedPerson: Identifiable {
+struct TrackedPerson: Identifiable, Equatable {
     let id: Int
     /// The most recent raw detection — noisy, used for matching.
     var boundingBox: CGRect

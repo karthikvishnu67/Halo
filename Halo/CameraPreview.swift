@@ -43,6 +43,11 @@ final class PreviewLayerHandle {
         return layer?.layerRectConverted(fromMetadataOutputRect: sensorSpace)
     }
 
+    /// The preview's size on screen.
+    var viewSize: CGSize? {
+        layer?.bounds.size
+    }
+
     /// Same conversion for a single point, so the head anchor lands in the
     /// same space as the box.
     func viewPoint(for point: CGPoint) -> CGPoint? {

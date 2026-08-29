@@ -29,14 +29,32 @@ import Foundation
 /// obstruction noise, which is what the quantile is for.
 struct RadioDistanceFilter {
 
-    /// How much history to consider. Long enough to catch a clear reading
-    /// between obstructed ones, short enough that projecting across it stays
-    /// trustworthy.
-    private let window: TimeInterval = 3
+    /// How much history to consider.
+    ///
+    /// This has to be long enough to *contain* an unobstructed reading. A
+    /// backgrounded phone is heard about once a second, so a three-second
+    /// window holds barely three samples — too few for a quantile to reject
+    /// anything, and the estimate drifts far enough that a broadcast can be
+    /// attributed to a bystander standing at the wrong distance. Six seconds
+    /// is affordable because movement is now removed by a fitted slope rather
+    /// than assumed away.
+    private let window: TimeInterval = 6
 
     /// Which quantile to take. Not the minimum: a single wild reflection can
     /// read absurdly close, and picking the outright lowest would chase it.
-    private let quantile = 0.25
+    private let quantile = 0.2
+
+    /// The furthest a reading may be carried forward. The speed used to project
+    /// is itself estimated from these same noisy readings, so over a long
+    /// enough reach a wrong speed does more damage than the movement it was
+    /// meant to correct.
+    private let maxProjection: Double = 4.0
+
+    /// Nobody walks faster than this in the situations Halo cares about.
+    private let maxSpeed: Double = 2.5
+
+    /// Fewer readings than this and any slope is noise.
+    private let minimumSamplesForSpeed = 3
 
     private var readings: [(distance: Double, at: TimeInterval)] = []
 
@@ -47,18 +65,56 @@ struct RadioDistanceFilter {
 
     /// The de-biased distance, or nil if nothing recent enough to judge.
     ///
-    /// - Parameter speed: how fast they are moving away in metres per second
-    ///   (negative when approaching). Used to carry older readings forward to
-    ///   now, so that movement is not mistaken for interference.
-    func estimate(at now: TimeInterval, movingAt speed: Double = 0) -> Double? {
+    func estimate(at now: TimeInterval) -> Double? {
+        let speed = self.speed(at: now)
         let projected = readings
             .filter { now - $0.at <= window }
-            .map { $0.distance + speed * (now - $0.at) }
+            .map { reading in
+                let shift = speed * (now - reading.at)
+                return reading.distance + min(max(shift, -maxProjection), maxProjection)
+            }
             .sorted()
         guard !projected.isEmpty else { return nil }
 
         let index = Int((Double(projected.count - 1) * quantile).rounded())
         return max(projected[index], 0.1)
+    }
+
+    /// How fast they are moving away, in metres per second, negative when
+    /// approaching.
+    ///
+    /// Fitted across the whole window rather than taken from the difference
+    /// between consecutive readings. With adverts arriving perhaps once a
+    /// second and metres of noise on each, consecutive differences imply a
+    /// stationary person is sprinting — and a matcher that believes that will
+    /// reject the very pairing that is correct, because the camera can plainly
+    /// see they are standing still. A slope across several readings averages
+    /// most of that away.
+    func speed(at now: TimeInterval) -> Double {
+        let recent = readings.filter { now - $0.at <= window }
+        guard recent.count >= minimumSamplesForSpeed else { return 0 }
+
+        let meanTime = recent.map(\.at).reduce(0, +) / Double(recent.count)
+        let meanDistance = recent.map(\.distance).reduce(0, +) / Double(recent.count)
+
+        var covariance = 0.0
+        var variance = 0.0
+        for reading in recent {
+            let dt = reading.at - meanTime
+            covariance += dt * (reading.distance - meanDistance)
+            variance += dt * dt
+        }
+        guard variance > 0 else { return 0 }
+
+        return min(max(covariance / variance, -maxSpeed), maxSpeed)
+    }
+
+    /// How long this broadcast has been under observation, within the window.
+    /// A filter that has only just started cannot have rejected anything.
+    func observedSpan(at now: TimeInterval) -> TimeInterval {
+        let recent = readings.filter { now - $0.at <= window }
+        guard let first = recent.first, let last = recent.last else { return 0 }
+        return last.at - first.at
     }
 
     /// True when nothing has been heard for a while — the broadcaster walked

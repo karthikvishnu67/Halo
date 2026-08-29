@@ -10,12 +10,29 @@ import SwiftUI
 struct ContentView: View {
     @State private var camera = CameraManager()
     @State private var previewHandle = PreviewLayerHandle()
+
     /// Only one halo is open at a time — attention is the point.
     @State private var openedTrackID: Int?
 
     /// The viewer's own dial: how far away they care about. Their filter,
     /// their call — see the design notes in CLAUDE.md.
     @AppStorage("haloRadiusMetres") private var radiusMetres: Double = 12
+
+    /// With this on, halos come from broadcasts that had to be *matched* to a
+    /// person — so people who aren't broadcasting get nothing at all. Off, every
+    /// detected person gets a profile, which is only useful for testing tracking.
+    @AppStorage("simulateRadio") private var simulateRadio = true
+
+    @State private var radio = SimulatedRadio()
+    @State private var matcher = PresenceMatcher()
+
+    /// Which tracked person is carrying which broadcast, as decided by the
+    /// matcher. Anyone absent from here shows no halo.
+    @State private var placements: [Int: HaloProfile] = [:]
+
+    /// Broadcasts heard but not placed on anyone — behind you, through a wall,
+    /// or genuinely ambiguous. Shown as a count, never guessed onto a person.
+    @State private var unplacedCount = 0
 
     var body: some View {
         ZStack {
@@ -25,7 +42,7 @@ struct ContentView: View {
             case .running:
                 CameraPreview(session: camera.session, handle: previewHandle)
                     .overlay { halos }
-                    .overlay(alignment: .top) { detectionCount }
+                    .overlay(alignment: .top) { status }
                     .overlay(alignment: .bottom) { radiusDial }
                     .ignoresSafeArea()
 
@@ -43,20 +60,49 @@ struct ContentView: View {
         }
         .statusBarHidden()
         .task { await camera.start() }
+        .onChange(of: camera.detector.people) { _, people in
+            matchBroadcastsToPeople(people)
+        }
     }
 
-    /// One halo per tracked subject, inside the viewer's chosen radius.
+    /// Runs the whole V2 chain once per detection pass: work out how far away
+    /// each person is, hear whatever the radio has to say, and let the matcher
+    /// decide which broadcast belongs to whom.
+    private func matchBroadcastsToPeople(_ people: [TrackedPerson]) {
+        guard simulateRadio, let size = previewHandle.viewSize, size.height > 0 else {
+            placements = [:]
+            unplacedCount = 0
+            return
+        }
+
+        let now = ProcessInfo.processInfo.systemUptime
+        let subjects = people.compactMap { person -> PresenceMatcher.Subject? in
+            guard let rect = previewHandle.viewRect(for: person.smoothedBox) else { return nil }
+            return .init(id: person.id, distance: distanceMetres(of: rect, in: size.height))
+        }
+
+        let outcome = matcher.update(subjects: subjects,
+                                     presences: radio.presences(for: subjects, at: now),
+                                     now: now)
+
+        placements = Dictionary(uniqueKeysWithValues:
+            outcome.matched.map { ($0.trackID, $0.presence.profile) })
+        unplacedCount = outcome.unplaced.count
+    }
+
+    /// A halo for each person we can attribute one to, inside the viewer's radius.
     private var halos: some View {
         GeometryReader { geometry in
             ForEach(camera.detector.people) { person in
-                if let rect = previewHandle.viewRect(for: person.smoothedBox),
+                if let profile = profile(for: person.id),
+                   let rect = previewHandle.viewRect(for: person.smoothedBox),
                    let head = previewHandle.viewPoint(for: person.displayHead) {
                     let metres = distanceMetres(of: rect, in: geometry.size.height)
 
                     // An unknown distance still shows a halo: "we can't tell"
                     // must not quietly become "they're too far away".
                     if metres.map({ $0 <= radiusMetres }) ?? true {
-                        HaloView(profile: camera.detector.profile(for: person.id),
+                        HaloView(profile: profile,
                                  distance: metres,
                                  headPoint: head,
                                  personHeight: rect.height,
@@ -75,6 +121,13 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    /// Nil means this person gets no halo — either they aren't broadcasting, or
+    /// we can't yet tell which broadcast is theirs. Both must look the same from
+    /// outside: absent.
+    private func profile(for trackID: Int) -> HaloProfile? {
+        simulateRadio ? placements[trackID] : camera.detector.profile(for: trackID)
     }
 
     /// Someone's apparent height gives a rough distance. Nil means we couldn't
@@ -118,15 +171,38 @@ struct ContentView: View {
         return min(max(rect.height / referenceHeight, 0.7), 1.6)
     }
 
-    private var detectionCount: some View {
-        Text(String(format: "%d tracked · %.0f/s",
-                    camera.detector.people.count, camera.detector.passesPerSecond))
-            .font(.caption.monospaced())
-            .foregroundStyle(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.black.opacity(0.5), in: .capsule)
-            .padding(.top, 60)
+    private var status: some View {
+        VStack(spacing: 6) {
+            Button {
+                simulateRadio.toggle()
+                placements = [:]
+                unplacedCount = 0
+            } label: {
+                Text(String(format: "%d tracked · %.0f/s · %@",
+                            camera.detector.people.count,
+                            camera.detector.passesPerSecond,
+                            simulateRadio ? "radio" : "all"))
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.5), in: .capsule)
+            }
+            .buttonStyle(.plain)
+
+            // Heard, but not placed on anyone. Saying so is honest and builds
+            // anticipation; guessing would put someone's message over a
+            // stranger's head.
+            if simulateRadio && unplacedCount > 0 {
+                Text("◍ \(unplacedCount) nearby")
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.white.opacity(0.75))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(.black.opacity(0.35), in: .capsule)
+            }
+        }
+        .padding(.top, 60)
     }
 
     private func message(_ text: String) -> some View {
