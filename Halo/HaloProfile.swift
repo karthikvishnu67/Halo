@@ -31,7 +31,8 @@ struct HaloProfile {
     /// Real profiles arrive in V2, when a person's device broadcasts its own
     /// presence. Until then this is theatre: the app has no idea who anyone is.
     static let cast: [HaloProfile] = [
-        HaloProfile(name: "Maya", message: "Robotics • Music", tint: .pink, sticker: "🤖"),
+        HaloProfile(name: "Vegeta", message: "checking power levels", tint: .orange,
+                    imageData: DemoArtwork.overNineThousand),
         HaloProfile(name: "Arjun", message: "Looking for a chess game", tint: .orange, sticker: "♟️"),
         HaloProfile(name: "Priya", message: "Open to meeting people", tint: .mint),
         HaloProfile(name: "Rohan", message: "Anyone going to the hackathon?", tint: .yellow),
