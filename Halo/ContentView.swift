@@ -26,6 +26,16 @@ struct ContentView: View {
     @State private var radio = SimulatedRadio()
     @State private var matcher = PresenceMatcher()
 
+    /// What you are broadcasting, if anything.
+    @State private var broadcast = BroadcastController()
+    @State private var showComposer = false
+
+    /// Your own halo, kept between launches. Stored as its parts because
+    /// @AppStorage holds simple values.
+    @AppStorage("myHaloName") private var myName = ""
+    @AppStorage("myHaloMessage") private var myMessage = ""
+    @AppStorage("myHaloTint") private var myTint = 0
+
     /// Which tracked person is carrying which broadcast, as decided by the
     /// matcher. Anyone absent from here shows no halo.
     @State private var placements: [Int: HaloProfile] = [:]
@@ -43,6 +53,7 @@ struct ContentView: View {
                 CameraPreview(session: camera.session, handle: previewHandle)
                     .overlay { halos }
                     .overlay(alignment: .top) { status }
+                    .overlay(alignment: .topTrailing) { myHaloButton }
                     .overlay(alignment: .bottom) { radiusDial }
                     .ignoresSafeArea()
 
@@ -60,6 +71,17 @@ struct ContentView: View {
         }
         .statusBarHidden()
         .task { await camera.start() }
+        .task {
+            // Expiry has to be noticed even while nothing else happens, or the
+            // app could keep claiming you are visible after you stopped being.
+            while !Task.isCancelled {
+                broadcast.pruneExpired()
+                try? await Task.sleep(for: .seconds(10))
+            }
+        }
+        .sheet(isPresented: $showComposer) {
+            HaloComposer(draft: myHalo, controller: broadcast)
+        }
         .onChange(of: camera.detector.people) { _, people in
             matchBroadcastsToPeople(people)
         }
@@ -203,6 +225,56 @@ struct ContentView: View {
             }
         }
         .padding(.top, 60)
+    }
+
+    private var myHalo: Binding<HaloDraft> {
+        Binding(
+            get: { HaloDraft(name: myName, message: myMessage, tintIndex: myTint) },
+            set: { draft in
+                let clamped = draft.clamped
+                myName = clamped.name
+                myMessage = clamped.message
+                myTint = clamped.tintIndex
+            }
+        )
+    }
+
+    /// Your own halo, and whether it is currently visible to anyone. Knowing
+    /// that at a glance is a privacy commitment, not a convenience — so the
+    /// countdown ticks rather than sitting there stale.
+    private var myHaloButton: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            let broadcasting = broadcast.isBroadcasting(at: context.date)
+
+            Button {
+                showComposer = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: broadcasting
+                          ? "dot.radiowaves.left.and.right"
+                          : "person.crop.circle.dashed")
+                    if broadcasting {
+                        Text(remainingLabel(at: context.date))
+                    }
+                }
+                .font(.caption.monospaced())
+                .foregroundStyle(broadcasting ? .black : .white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(broadcasting ? AnyShapeStyle(.green.opacity(0.85))
+                                         : AnyShapeStyle(.black.opacity(0.5)),
+                            in: .capsule)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.top, 58)
+        .padding(.trailing, 16)
+    }
+
+    private func remainingLabel(at moment: Date) -> String {
+        let minutes = Int(broadcast.remaining(at: moment)) / 60
+        if minutes >= 60 { return "\(minutes / 60)h \(minutes % 60)m" }
+        return minutes > 0 ? "\(minutes)m" : "<1m"
     }
 
     private func message(_ text: String) -> some View {

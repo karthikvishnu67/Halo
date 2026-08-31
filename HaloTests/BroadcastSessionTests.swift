@@ -40,8 +40,18 @@ struct BroadcastSessionTests {
 
         #expect(controller.isBroadcasting(at: start.addingTimeInterval(60)))
         #expect(!controller.isBroadcasting(at: start.addingTimeInterval(16 * 60)))
+    }
+
+    @Test func anExpiredSessionIsEventuallyCleanedUp() {
+        let controller = BroadcastController()
+        controller.start(HaloProfile.cast[0], for: .fifteenMinutes, at: start)
+
+        controller.pruneExpired(at: start.addingTimeInterval(60))
+        #expect(controller.session != nil, "still running, so leave it alone")
+
+        controller.pruneExpired(at: start.addingTimeInterval(16 * 60))
         #expect(controller.session == nil,
-                "an expired session is cleared, so the UI can never show a stale 'you are visible'")
+                "once expired it is dropped, so nothing can show a stale 'you are visible'")
     }
 
     @Test func stoppingIsImmediate() {

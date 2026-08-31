@@ -83,15 +83,19 @@ final class BroadcastController {
         session = session?.extended(by: length)
     }
 
-    /// Expired sessions are cleared rather than left lying around, so the UI
-    /// can simply ask this and never show a stale "you are visible".
+    /// Deliberately does not clean up after itself: views ask this while
+    /// drawing, and changing state during a view update is a bug. Expiry is
+    /// handled by `pruneExpired`, called on a timer.
     func isBroadcasting(at moment: Date = Date()) -> Bool {
-        guard let session else { return false }
-        if !session.isActive(at: moment) {
+        session?.isActive(at: moment) ?? false
+    }
+
+    /// Drops a session that has run out, so nothing can show a stale
+    /// "you are visible".
+    func pruneExpired(at moment: Date = Date()) {
+        if let session, !session.isActive(at: moment) {
             self.session = nil
-            return false
         }
-        return true
     }
 
     func remaining(at moment: Date = Date()) -> TimeInterval {

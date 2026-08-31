@@ -36,6 +36,8 @@ Halo/
     ├── PresenceMatcher.swift # joins broadcasts to bodies; abstains when unsure
     ├── RadioDistanceFilter.swift  # de-biases obstructed radio distance
     ├── BroadcastSession.swift     # what you are broadcasting, and until when
+    ├── HaloDraft.swift            # your own halo, with size the only limit
+    ├── HaloComposer.swift         # setting it, and how long to wear it
     ├── SimulatedRadio.swift       # fake broadcasts, so the matcher can be watched working
     ├── DistanceEstimate.swift     # apparent size -> metres
     ├── HaloView.swift        # balloon, tether, open/closed state
@@ -46,8 +48,12 @@ Halo/
 V1 is complete. Halos are now balloons on a string, tethered to the head Vision
 reports, opening into the person's message on tap.
 
-**Next:** distance estimation from apparent size (the viewer's radius dial), and
-letting the user set their own halo instead of a hardcoded cast.
+You can now set your own halo and broadcast it for a bounded time, and the
+matcher runs in the app against a simulated radio, so halos appear only on
+people a broadcast could be attributed to.
+
+**Next:** calibrate `DistanceEstimate.assumedBodySpan` against a tape measure,
+then real BLE between two phones.
 
 ### Hard-won details worth not rediscovering
 
