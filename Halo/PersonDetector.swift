@@ -168,7 +168,7 @@ final class PersonDetector {
         }
         lastPassAt = now
 
-        let tracked = tracker.update(with: found)
+        let tracked = tracker.update(with: found, at: ProcessInfo.processInfo.systemUptime)
         profiles.update(for: tracked)
         people = tracked
     }

@@ -85,6 +85,15 @@ then real BLE between two phones.
   suppress on how much of the smaller box lies inside the larger.
 - **Detection is unreliable in dim rooms** regardless of request type — verified
   by running both Vision requests over captured frames.
+- **Losing a track is expensive, so hold on longer than feels necessary.** When
+  a track dies the person comes back as a stranger wearing somebody else's halo,
+  which is far worse than briefly keeping someone who did walk away. Retirement
+  and drawing windows are in *seconds*, not passes, since detection runs at
+  anywhere from 15 to 30 a second.
+- **Overlap-based matching fails exactly when the camera moves.** A pan shifts
+  every box at once, and two boxes that are plainly the same person may not
+  overlap at all. There is a fallback: a detection of about the right size, near
+  where the subject was heading, counts as them — ranked below any real overlap.
 - **Radio and camera arrive at wildly different rates**, so the matcher works in
   seconds, not update counts: 15-30 camera passes a second against perhaps one
   advert a second from a backgrounded phone. Treating those as equal ticks makes

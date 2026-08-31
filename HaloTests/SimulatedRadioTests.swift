@@ -37,7 +37,8 @@ struct SimulatedRadioTests {
     /// nothing. Not a marker, not a placeholder — absent.
     @Test(arguments: 1...20 as ClosedRange<UInt64>)
     func onlyBroadcastersGetHalos(seed: UInt64) {
-        // The simulator treats odd track ids as Halo users.
+        // The simulator's broadcasters follow the nearest person and the third
+        // nearest, so the middle one is deliberately not a Halo user.
         let subjects: [PresenceMatcher.Subject] = [
             .init(id: 1, distance: 2.0),
             .init(id: 2, distance: 6.0),
@@ -75,6 +76,21 @@ struct SimulatedRadioTests {
 
         #expect(outcome.matched.isEmpty)
         #expect(outcome.unplaced.count == 1, "the unseen broadcaster is still audible")
+    }
+
+    /// A broadcast must not change identity just because the camera lost sight
+    /// of its owner for a moment and gave them a new track id. On device that
+    /// turned one person into a succession of different strangers.
+    @Test func aBroadcastKeepsItsIdentityWhenTrackIDsChange() {
+        let radio = SimulatedRadio(seed: 3)
+
+        let before = radio.presences(for: [.init(id: 7, distance: 2.5)], at: 0)
+        // Same person, same place, new track id — the camera blinked.
+        let after = radio.presences(for: [.init(id: 41, distance: 2.5)], at: 2)
+
+        #expect(before.first?.id == after.first?.id, "the same broadcast, still")
+        #expect(before.first?.profile.name == after.first?.profile.name,
+                "and still the same person's halo")
     }
 
     /// The simulator must reproduce exactly when seeded, or a failing run can't

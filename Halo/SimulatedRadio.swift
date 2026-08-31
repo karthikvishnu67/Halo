@@ -34,9 +34,17 @@ struct SplitMix64: RandomNumberGenerator {
 final class SimulatedRadio {
 
     /// Someone whose phone we pretend is broadcasting.
+    ///
+    /// Their identity is fixed for the life of the app, and deliberately owes
+    /// nothing to the camera. A broadcast comes from a radio: it does not stop
+    /// existing, or turn into somebody else, because the camera briefly lost
+    /// sight of its owner. Tying these to track ids meant a shaken camera
+    /// produced a *different person's* halo, which is exactly backwards.
     private struct Broadcaster {
         let presenceID: String
         let profile: HaloProfile
+        /// Which visible person they are, counting from the nearest.
+        let followsRank: Int
         var lastAdvertAt: TimeInterval
         var lastReading: Double
     }
@@ -49,47 +57,51 @@ final class SimulatedRadio {
     /// you, or through a wall. It should never be placed on anyone.
     var includeUnseenBroadcaster = true
 
-    private var broadcasters: [Int: Broadcaster] = [:]
-    private var nextProfile = 0
+    private var roster: [Broadcaster]
     private var rng: SplitMix64
 
     /// - Parameter seed: fix it to replay exactly the same noise, which is what
     ///   the tests do. Left out, every run differs.
     init(seed: UInt64? = nil) {
         rng = SplitMix64(seed: seed ?? UInt64.random(in: 0..<UInt64.max))
-    }
-
-    /// Which tracked people are pretending to run Halo. Odd track ids do, even
-    /// ones don't — deliberately visible in the demo, because the people with
-    /// no halo are the point: someone who hasn't opted in is absent from the
-    /// system rather than marked as a non-user.
-    private func isHaloUser(_ trackID: Int) -> Bool {
-        trackID % 2 == 1
+        // Ranks chosen so somebody visible is always *not* broadcasting: the
+        // people with no halo are as much the point as the people with one.
+        roster = [
+            Broadcaster(presenceID: "sim-a", profile: HaloProfile.cast[0],
+                        followsRank: 0, lastAdvertAt: -.greatestFiniteMagnitude, lastReading: 0),
+            Broadcaster(presenceID: "sim-b", profile: HaloProfile.cast[2],
+                        followsRank: 2, lastAdvertAt: -.greatestFiniteMagnitude, lastReading: 0),
+            Broadcaster(presenceID: "sim-c", profile: HaloProfile.cast[4],
+                        followsRank: 3, lastAdvertAt: -.greatestFiniteMagnitude, lastReading: 0),
+        ]
     }
 
     func presences(for subjects: [PresenceMatcher.Subject],
                    at now: TimeInterval) -> [HaloPresence] {
-        forgetDeparted(subjects)
+        // Ranked by distance rather than by track id, so a broadcaster keeps
+        // following the same human even when the camera loses them for a
+        // moment and gives them a new id.
+        let ranked = subjects
+            .compactMap { subject in subject.distance.map { (subject: subject, distance: $0) } }
+            .sorted { $0.distance < $1.distance }
 
         var heard: [HaloPresence] = []
 
-        for subject in subjects where isHaloUser(subject.id) {
-            guard let trueDistance = subject.distance else { continue }
-
-            var broadcaster = broadcasters[subject.id] ?? adopt(subject.id, at: now, distance: trueDistance)
+        for index in roster.indices {
+            let rank = roster[index].followsRank
+            guard rank < ranked.count else { continue }
 
             // A new advert only occasionally, exactly as a backgrounded phone
             // would manage.
-            if now - broadcaster.lastAdvertAt >= advertInterval {
-                broadcaster.lastAdvertAt = now
-                broadcaster.lastReading = reading(for: trueDistance)
+            if now - roster[index].lastAdvertAt >= advertInterval {
+                roster[index].lastAdvertAt = now
+                roster[index].lastReading = reading(for: ranked[rank].distance)
             }
-            broadcasters[subject.id] = broadcaster
 
-            heard.append(HaloPresence(id: broadcaster.presenceID,
-                                      profile: broadcaster.profile,
-                                      rawDistance: broadcaster.lastReading,
-                                      heardAt: broadcaster.lastAdvertAt))
+            heard.append(HaloPresence(id: roster[index].presenceID,
+                                      profile: roster[index].profile,
+                                      rawDistance: roster[index].lastReading,
+                                      heardAt: roster[index].lastAdvertAt))
         }
 
         if includeUnseenBroadcaster {
@@ -97,15 +109,6 @@ final class SimulatedRadio {
         }
 
         return heard
-    }
-
-    private func adopt(_ trackID: Int, at now: TimeInterval, distance: Double) -> Broadcaster {
-        let profile = HaloProfile.cast[nextProfile % HaloProfile.cast.count]
-        nextProfile += 1
-        return Broadcaster(presenceID: "sim-\(trackID)",
-                           profile: profile,
-                           lastAdvertAt: now,
-                           lastReading: reading(for: distance))
     }
 
     /// Radio distance, with the error shaped the way the real thing is: mostly
@@ -141,8 +144,4 @@ final class SimulatedRadio {
                             heardAt: unseenAdvertAt)
     }
 
-    private func forgetDeparted(_ subjects: [PresenceMatcher.Subject]) {
-        let live = Set(subjects.map(\.id))
-        broadcasters = broadcasters.filter { live.contains($0.key) }
-    }
 }
