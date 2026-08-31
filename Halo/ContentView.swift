@@ -36,6 +36,10 @@ struct ContentView: View {
     @AppStorage("myHaloMessage") private var myMessage = ""
     @AppStorage("myHaloTint") private var myTint = 0
 
+    /// Kept in memory so drawing never touches the disk; written out when it
+    /// changes.
+    @State private var myImageData: Data? = HaloImageStore.load()
+
     /// Which tracked person is carrying which broadcast, as decided by the
     /// matcher. Anyone absent from here shows no halo.
     @State private var placements: [Int: HaloProfile] = [:]
@@ -128,7 +132,6 @@ struct ContentView: View {
                                  distance: metres,
                                  headPoint: head,
                                  personHeight: rect.height,
-                                 scale: scale(for: rect),
                                  isOpen: openedTrackID == person.id,
                                  screenWidth: geometry.size.width,
                                  onTap: { toggle(person.id) })
@@ -185,14 +188,6 @@ struct ContentView: View {
         openedTrackID = (openedTrackID == id) ? nil : id
     }
 
-    /// A nearer person fills more of the frame, so their halo grows with them.
-    /// Clamped at both ends: never unreadably small, never overwhelming.
-    private func scale(for rect: CGRect) -> CGFloat {
-        /// Roughly a person standing a few metres away, filling half the screen.
-        let referenceHeight: CGFloat = 420
-        return min(max(rect.height / referenceHeight, 0.7), 1.6)
-    }
-
     private var status: some View {
         VStack(spacing: 6) {
             Button {
@@ -229,12 +224,19 @@ struct ContentView: View {
 
     private var myHalo: Binding<HaloDraft> {
         Binding(
-            get: { HaloDraft(name: myName, message: myMessage, tintIndex: myTint) },
+            get: {
+                HaloDraft(name: myName, message: myMessage,
+                          tintIndex: myTint, imageData: myImageData)
+            },
             set: { draft in
                 let clamped = draft.clamped
                 myName = clamped.name
                 myMessage = clamped.message
                 myTint = clamped.tintIndex
+                if clamped.imageData != myImageData {
+                    myImageData = clamped.imageData
+                    HaloImageStore.save(clamped.imageData)
+                }
             }
         )
     }

@@ -5,6 +5,7 @@
 //  Setting your own halo, and deciding how long to wear it.
 //
 
+import PhotosUI
 import SwiftUI
 
 struct HaloComposer: View {
@@ -12,6 +13,7 @@ struct HaloComposer: View {
     let controller: BroadcastController
 
     @State private var length: BroadcastSession.Length = .oneHour
+    @State private var pickedPhoto: PhotosPickerItem?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -33,6 +35,17 @@ struct HaloComposer: View {
                         .onChange(of: draft) { _, _ in draft = draft.clamped }
                     TextField("Say something", text: $draft.message, axis: .vertical)
                         .lineLimit(1...3)
+
+                    PhotosPicker(selection: $pickedPhoto, matching: .images) {
+                        Label(draft.imageData == nil ? "Add a picture" : "Change picture",
+                              systemImage: "photo")
+                    }
+                    if draft.imageData != nil {
+                        Button("Remove picture", role: .destructive) {
+                            draft.imageData = nil
+                            pickedPhoto = nil
+                        }
+                    }
 
                     HStack {
                         Text("Colour")
@@ -79,6 +92,12 @@ struct HaloComposer: View {
                     }
                 }
             }
+            .task(id: pickedPhoto) {
+                guard let pickedPhoto,
+                      let data = try? await pickedPhoto.loadTransferable(type: Data.self),
+                      let image = UIImage(data: data) else { return }
+                draft.imageData = HaloImage.shrink(image)
+            }
             .navigationTitle("Your halo")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -104,11 +123,7 @@ struct HaloComposer: View {
 
             Rectangle()
                 .fill(.primary.opacity(0.35))
-                .frame(width: 1.5, height: 26)
-
-            Circle()
-                .fill(HaloDraft.palette[min(draft.tintIndex, HaloDraft.palette.count - 1)])
-                .frame(width: 20, height: 20)
+                .frame(width: 1.5, height: 30)
 
             Image(systemName: "person.fill")
                 .font(.title)

@@ -29,18 +29,25 @@ struct HaloDraft: Equatable {
     var message: String = ""
     var tintIndex: Int = 0
 
+    /// A picture, already shrunk. Kept small on purpose: over Bluetooth a halo
+    /// has to travel through a brief connection at a few kilobytes a second, so
+    /// a full-resolution photo would take the best part of a minute to arrive.
+    var imageData: Data?
+
     /// Trimmed and clipped to length. Applied as you type, so the limit is
     /// visible rather than enforced silently at the last moment.
     var clamped: HaloDraft {
         HaloDraft(name: String(name.prefix(Self.nameLimit)),
                   message: String(message.prefix(Self.messageLimit)),
-                  tintIndex: min(max(tintIndex, 0), Self.palette.count - 1))
+                  tintIndex: min(max(tintIndex, 0), Self.palette.count - 1),
+                  imageData: imageData)
     }
 
     /// Nothing to say means nothing to broadcast — silence is a valid state,
     /// not an empty balloon.
     var isBroadcastable: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        imageData != nil
+            || !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
@@ -48,6 +55,7 @@ struct HaloDraft: Equatable {
         let clamped = self.clamped
         return HaloProfile(name: clamped.name.trimmingCharacters(in: .whitespacesAndNewlines),
                            message: clamped.message.trimmingCharacters(in: .whitespacesAndNewlines),
-                           tint: Self.palette[clamped.tintIndex])
+                           tint: Self.palette[clamped.tintIndex],
+                           imageData: clamped.imageData)
     }
 }

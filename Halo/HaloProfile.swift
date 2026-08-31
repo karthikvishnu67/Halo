@@ -14,23 +14,31 @@ import SwiftUI
 struct HaloProfile {
     let name: String
     let message: String
-    /// Colours the closed balloon, so several people are distinguishable at a
-    /// glance without opening anything. Per-person decoration, not a category.
+    /// Colours the balloon, so several people are distinguishable at a glance.
+    /// Per-person decoration, not a category the app assigns.
     let tint: Color
+
+    /// Something bigger than words: a meme, album art, a photo. A halo is
+    /// allowed to be mostly picture — the size limit is on the balloon, not on
+    /// what kind of thing goes in it.
+    var imageData: Data?
+
+    /// A stand-in for a picture until there is one: a large glyph or emoji.
+    var sticker: String?
 
     /// A small fake cast, so multiple people on screen are distinguishable.
     ///
     /// Real profiles arrive in V2, when a person's device broadcasts its own
     /// presence. Until then this is theatre: the app has no idea who anyone is.
     static let cast: [HaloProfile] = [
-        HaloProfile(name: "Maya", message: "Robotics • Music", tint: .pink),
-        HaloProfile(name: "Arjun", message: "Looking for a chess game", tint: .orange),
+        HaloProfile(name: "Maya", message: "Robotics • Music", tint: .pink, sticker: "🤖"),
+        HaloProfile(name: "Arjun", message: "Looking for a chess game", tint: .orange, sticker: "♟️"),
         HaloProfile(name: "Priya", message: "Open to meeting people", tint: .mint),
         HaloProfile(name: "Rohan", message: "Anyone going to the hackathon?", tint: .yellow),
-        HaloProfile(name: "Ananya", message: "Free for coffee", tint: .cyan),
+        HaloProfile(name: "Ananya", message: "Free for coffee", tint: .cyan, sticker: "☕️"),
         HaloProfile(name: "Dev", message: "AI • Chess • Photography", tint: .purple),
         HaloProfile(name: "Sara", message: "Just arrived", tint: .green),
-        HaloProfile(name: "Ishaan", message: "Ask me about music", tint: .blue),
+        HaloProfile(name: "Ishaan", message: "Ask me about music", tint: .blue, sticker: "🎧"),
     ]
 
 }

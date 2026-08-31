@@ -37,6 +37,7 @@ Halo/
     ├── RadioDistanceFilter.swift  # de-biases obstructed radio distance
     ├── BroadcastSession.swift     # what you are broadcasting, and until when
     ├── HaloDraft.swift            # your own halo, with size the only limit
+    ├── HaloImage.swift            # shrinking a picture to balloon size
     ├── HaloComposer.swift         # setting it, and how long to wear it
     ├── SimulatedRadio.swift       # fake broadcasts, so the matcher can be watched working
     ├── DistanceEstimate.swift     # apparent size -> metres
@@ -137,6 +138,12 @@ Everything below follows from taking that seriously.
 - A **balloon on a string, tethered to the top of the head** — the cartoon
   thought-cloud. The tether is not decoration: it makes ownership unambiguous when
   several halos overlap.
+- The balloon is **a card big enough to hold a picture**, not a marker. Memes,
+  album art, a photo — a halo is allowed to be mostly image.
+- **Perspective does the work of keeping a crowd glanceable.** Halo size follows
+  the person's apparent size, so a distant halo is naturally small and present
+  rather than small and hidden, and only people near you are big enough to read.
+  There is no separate "collapsed" design; it is one object at many sizes.
 - **Physically plausible.** Size and string length scale with the person, so a
   halo behaves like an object hanging above them rather than UI pasted on glass.
   This is what makes it read as attached; it is also the same behaviour that
